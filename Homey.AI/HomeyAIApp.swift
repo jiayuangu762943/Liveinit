@@ -11,25 +11,33 @@ import SwiftUI
 import Amplify
 import AWSCognitoAuthPlugin
 import AWSS3StoragePlugin
+import Firebase
+import FirebaseCore
+
+
+
+class AppDelegate: NSObject, UIApplicationDelegate {
+  func application(_ application: UIApplication,
+                   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+    FirebaseApp.configure()
+
+    return true
+  }
+}
 
 @main
 struct HomeyAIApp: App {
-    init() {
-       do {
-           try Amplify.add(plugin: AWSCognitoAuthPlugin())
-           try Amplify.add(plugin: AWSS3StoragePlugin())
-           try Amplify.configure()
-           print("Initialized Amplify");
-       } catch {
-           print("Could not initialize Amplify: \(error)")
-       }
-   }
-
+    // register app delegate for Firebase setupl
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(AuthenticationService())
-                .environmentObject(StorageService())
+            NavigationView {
+                    ContentView()
+//                    .environmentObject(StorageService())
+            }
+                
         }
     }
 }

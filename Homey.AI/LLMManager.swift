@@ -116,7 +116,7 @@ class LLMManager{
     }
     
     
-    func setUserPrompt(dimensions: String){
+    func setUserPrompt(prompt: String){
         
     }
     
@@ -138,7 +138,7 @@ class LLMManager{
         let body = OpenAIChatBody(model: "gpt-4-turbo", messages: [message])
         
         let headers: HTTPHeaders = [
-            "Authorization": "Bearer \(Constants.openAIApiKey)",
+            "Authorization": "Bearer \(Constants.OPENAI_API_KEY)",
             "Content-Type": "application/json"
         ]
         do {
@@ -188,7 +188,7 @@ class LLMManager{
         let body = OpenAIChatBody(model: "gpt-4-turbo", messages: [message])
         
         let headers: HTTPHeaders = [
-            "Authorization": "Bearer \(Constants.openAIApiKey)",
+            "Authorization": "Bearer \(Constants.OPENAI_API_KEY)",
             "Content-Type": "application/json"
         ]
         do {
@@ -237,7 +237,7 @@ class LLMManager{
         let body = OpenAIChatBody(model: "gpt-4-turbo", messages: [message])
         
         let headers: HTTPHeaders = [
-            "Authorization": "Bearer \(Constants.openAIApiKey)",
+            "Authorization": "Bearer \(Constants.OPENAI_API_KEY)",
             "Content-Type": "application/json"
         ]
         do {

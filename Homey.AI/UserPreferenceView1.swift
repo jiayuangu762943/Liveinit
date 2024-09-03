@@ -86,9 +86,9 @@ struct UserPreferenceView1: View{
         .navigationTitle("Select Cards")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                NavigationLink(destination: ContentView(selectedCards: (selectedImgs ?? []))) { //ResultView(selectedIds: Array(selectedIds)
-                    Text("Done")
-                }
+//                NavigationLink(destination: ContentView(selectedCards: (selectedImgs ?? []))) { //ResultView(selectedIds: Array(selectedIds)
+//                    Text("Done")
+//                }
             }
         }
     }

@@ -46,13 +46,13 @@ struct RoomPlanView: View {
                         .cornerRadius(30)
                     }
 //                    Spacer()
-                    NavigationLink(destination: CaptureRoomView()){
-                        Text("Style your room")
-                            .padding(1).fixedSize(horizontal: false, vertical: true)
-                        Image(systemName: "house.fill" )
-                    }
-                    .backgroundStyle(.black) .buttonStyle(.borderedProminent)
-                    .cornerRadius(30)
+//                    NavigationLink(destination: CaptureRoomView()){
+//                        Text("Style your room")
+//                            .padding(1).fixedSize(horizontal: false, vertical: true)
+//                        Image(systemName: "house.fill" )
+//                    }
+//                    .backgroundStyle(.black) .buttonStyle(.borderedProminent)
+//                    .cornerRadius(30)
                     
                 }
               
