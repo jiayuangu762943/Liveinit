@@ -1,0 +1,23 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-homeyai-dev-62b22-authRole",
+      "UnauthRoleArn": "arn:aws:iam::051410722719:role/amplify-homeyai-dev-62b22-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::051410722719:role/amplify-homeyai-dev-62b22-authRole",
+      "Region": "us-west-1",
+      "DeploymentBucketName": "amplify-homeyai-dev-62b22-deployment",
+      "UnauthRoleName": "amplify-homeyai-dev-62b22-unauthRole",
+      "StackName": "amplify-homeyai-dev-62b22",
+      "StackId": "arn:aws:cloudformation:us-west-1:051410722719:stack/amplify-homeyai-dev-62b22/57440750-0693-11ef-b152-06e29eb8b40b",
+      "AmplifyAppId": "donh80pyps6ae"
+    },
+    "categories": {
+      "auth": {
+        "homeyai38f8ee93": {}
+      },
+      "storage": {
+        "image": {}
+      }
+    }
+  }
+}
