@@ -71,8 +71,6 @@
 		22D5AD0B2CE69D3B0047ECF7 /* AI_dark_green_couch.usdz in Resources */ = {isa = PBXBuildFile; fileRef = 22D5AD0A2CE69D3B0047ECF7 /* AI_dark_green_couch.usdz */; };
 		22D979292CD5D58B000EF2FB /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 22D979282CD5D58B000EF2FB /* GoogleService-Info.plist */; };
 		22D97C202C9FD51E00A5CCEE /* CallPython.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22D97C1F2C9FD51E00A5CCEE /* CallPython.swift */; };
-		22DB714C2BEE1EB100D43B9A /* amplifyconfiguration.json in Resources */ = {isa = PBXBuildFile; fileRef = 22DB714A2BEE1EB100D43B9A /* amplifyconfiguration.json */; };
-		22DB714D2BEE1EB100D43B9A /* awsconfiguration.json in Resources */ = {isa = PBXBuildFile; fileRef = 22DB714B2BEE1EB100D43B9A /* awsconfiguration.json */; };
 		22DC8A7C2C879E73004253CB /* Pillow_White.usdz in Resources */ = {isa = PBXBuildFile; fileRef = 22DC8A7B2C879E73004253CB /* Pillow_White.usdz */; };
 		22DEE21F2BD359F000931BA8 /* ballroom_chair.usdz in Resources */ = {isa = PBXBuildFile; fileRef = 22DEE21E2BD359F000931BA8 /* ballroom_chair.usdz */; };
 		22DEE2212BD35A0C00931BA8 /* High_Top.usdz in Resources */ = {isa = PBXBuildFile; fileRef = 22DEE2202BD35A0C00931BA8 /* High_Top.usdz */; };
@@ -135,8 +133,6 @@
 		22D5AD0A2CE69D3B0047ECF7 /* AI_dark_green_couch.usdz */ = {isa = PBXFileReference; lastKnownFileType = file; path = AI_dark_green_couch.usdz; sourceTree = "<group>"; };
 		22D979282CD5D58B000EF2FB /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		22D97C1F2C9FD51E00A5CCEE /* CallPython.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallPython.swift; sourceTree = "<group>"; };
-		22DB714A2BEE1EB100D43B9A /* amplifyconfiguration.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = amplifyconfiguration.json; sourceTree = SOURCE_ROOT; };
-		22DB714B2BEE1EB100D43B9A /* awsconfiguration.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = awsconfiguration.json; sourceTree = SOURCE_ROOT; };
 		22DC8A7B2C879E73004253CB /* Pillow_White.usdz */ = {isa = PBXFileReference; lastKnownFileType = file.usdz; path = Pillow_White.usdz; sourceTree = "<group>"; };
 		22DEE21E2BD359F000931BA8 /* ballroom_chair.usdz */ = {isa = PBXFileReference; lastKnownFileType = file.usdz; path = ballroom_chair.usdz; sourceTree = "<group>"; };
 		22DEE2202BD35A0C00931BA8 /* High_Top.usdz */ = {isa = PBXFileReference; lastKnownFileType = file.usdz; path = High_Top.usdz; sourceTree = "<group>"; };
@@ -263,8 +259,6 @@
 				221F302B2CA3648C004B9972 /* landing.png */,
 				2297139B2BE12E61004103E9 /* RemoteImage.swift */,
 				222EB7C32BDBC8F100C662BF /* UserPreferenceView1.swift */,
-				22DB714A2BEE1EB100D43B9A /* amplifyconfiguration.json */,
-				22DB714B2BEE1EB100D43B9A /* awsconfiguration.json */,
 				227AB6982BCA5AF200358840 /* Assets.xcassets */,
 				2285C2942BFA054D00628E0E /* Victorian_chair.png */,
 				2285C2962BFA054D00628E0E /* ballroom_chair.png */,
@@ -406,11 +400,9 @@
 				22B1A2162CED3DBD0026A7E6 /* accent_chair.usdz in Resources */,
 				22DF2B642BF1B3A300A43071 /* Cover_Chair.usdz in Resources */,
 				221F302C2CA3648C004B9972 /* landing.png in Resources */,
-				22DB714C2BEE1EB100D43B9A /* amplifyconfiguration.json in Resources */,
 				22E18C3D2BD6A1A900C2EC81 /* Stage_Set_with_Stairs.usdz in Resources */,
 				22B1A2142CED330D0026A7E6 /* coffee_table.usdz in Resources */,
 				2285C29D2BFA054E00628E0E /* Victorian_chair.png in Resources */,
-				22DB714D2BEE1EB100D43B9A /* awsconfiguration.json in Resources */,
 				2285C2A22BFA054E00628E0E /* Office_Chair_Modern.png in Resources */,
 				22E18C3B2BD6A15B00C2EC81 /* Round_White_Table_Cloth.usdz in Resources */,
 				22DF2B5E2BF1B37800A43071 /* Office_Chair.usdz in Resources */,

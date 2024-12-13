@@ -219,7 +219,9 @@ struct ContentView: View {
                     // Buttons for visualization
                     HStack {
                         NavigationLink(
-                            destination: InteriorDesignView(),
+                            destination:
+                                
+                            InteriorDesignView(),
                             /*(styleImages: styleImages),*/
                             isActive: $navigateToInteriorDesign
                         ) {
