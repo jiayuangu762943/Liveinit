@@ -15,14 +15,19 @@ struct SCNViewContainer: UIViewRepresentable {
         sceneView.allowsCameraControl = true
         sceneView.autoenablesDefaultLighting = true
         sceneView.backgroundColor = UIColor.black
-
-        DispatchQueue.main.async {
-            self.onSceneReady(sceneView)  // Call the closure to handle the scene view setup
+        
+        if let objects = sceneView.scene?.rootNode.childNode(withName: "Object_grp", recursively: true) {
+            objects.removeFromParentNode()
         }
+        
+//        DispatchQueue.main.async {
+            self.onSceneReady(sceneView)  // Call the closure to handle the scene view setup
+//        }
         return sceneView
     }
 
     func updateUIView(_ uiView: SCNView, context: Context) {
         // Update the view if needed
     }
+    
 }

@@ -47,7 +47,6 @@
 		226CD7A72BE08AE5005342F7 /* AWSCognitoAuthPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = 226CD7A62BE08AE5005342F7 /* AWSCognitoAuthPlugin */; };
 		226CD7AC2BE0B89F005342F7 /* HomeyAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226CD7AB2BE0B89F005342F7 /* HomeyAIApp.swift */; };
 		22771F5B2BD516B100BBAE3B /* Home.usdz in Resources */ = {isa = PBXBuildFile; fileRef = 22771F5A2BD516B100BBAE3B /* Home.usdz */; };
-		227AB6952BCA5AEF00358840 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227AB6942BCA5AEF00358840 /* AppDelegate.swift */; };
 		227AB6972BCA5AEF00358840 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227AB6962BCA5AEF00358840 /* ContentView.swift */; };
 		227AB6992BCA5AF200358840 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 227AB6982BCA5AF200358840 /* Assets.xcassets */; };
 		227AB69C2BCA5AF200358840 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 227AB69B2BCA5AF200358840 /* Preview Assets.xcassets */; };
@@ -62,7 +61,6 @@
 		2285C2A22BFA054E00628E0E /* Office_Chair_Modern.png in Resources */ = {isa = PBXBuildFile; fileRef = 2285C2992BFA054E00628E0E /* Office_Chair_Modern.png */; };
 		2285C2A32BFA054E00628E0E /* Stage_Set_with_Stairs.png in Resources */ = {isa = PBXBuildFile; fileRef = 2285C29A2BFA054E00628E0E /* Stage_Set_with_Stairs.png */; };
 		229713982BE1254A004103E9 /* AWSS3StoragePlugin in Frameworks */ = {isa = PBXBuildFile; productRef = 229713972BE1254A004103E9 /* AWSS3StoragePlugin */; };
-		2297139A2BE12A9A004103E9 /* StorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229713992BE12A9A004103E9 /* StorageService.swift */; };
 		2297139C2BE12E61004103E9 /* RemoteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2297139B2BE12E61004103E9 /* RemoteImage.swift */; };
 		22B1A2142CED330D0026A7E6 /* coffee_table.usdz in Resources */ = {isa = PBXBuildFile; fileRef = 22B1A2132CED330D0026A7E6 /* coffee_table.usdz */; };
 		22B1A2162CED3DBD0026A7E6 /* accent_chair.usdz in Resources */ = {isa = PBXBuildFile; fileRef = 22B1A2152CED3DBD0026A7E6 /* accent_chair.usdz */; };
@@ -110,7 +108,6 @@
 		226CD7AB2BE0B89F005342F7 /* HomeyAIApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeyAIApp.swift; sourceTree = "<group>"; };
 		22771F5A2BD516B100BBAE3B /* Home.usdz */ = {isa = PBXFileReference; lastKnownFileType = file.usdz; path = Home.usdz; sourceTree = "<group>"; };
 		227AB6912BCA5AEF00358840 /* Homey.AI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Homey.AI.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		227AB6942BCA5AEF00358840 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		227AB6962BCA5AEF00358840 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		227AB6982BCA5AF200358840 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		227AB69B2BCA5AF200358840 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -124,7 +121,6 @@
 		2285C2982BFA054D00628E0E /* Round_White_Table_Cloth.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Round_White_Table_Cloth.png; sourceTree = "<group>"; };
 		2285C2992BFA054E00628E0E /* Office_Chair_Modern.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Office_Chair_Modern.png; sourceTree = "<group>"; };
 		2285C29A2BFA054E00628E0E /* Stage_Set_with_Stairs.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Stage_Set_with_Stairs.png; sourceTree = "<group>"; };
-		229713992BE12A9A004103E9 /* StorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageService.swift; sourceTree = "<group>"; };
 		2297139B2BE12E61004103E9 /* RemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImage.swift; sourceTree = "<group>"; };
 		22B1A2132CED330D0026A7E6 /* coffee_table.usdz */ = {isa = PBXFileReference; lastKnownFileType = file; path = coffee_table.usdz; sourceTree = "<group>"; };
 		22B1A2152CED3DBD0026A7E6 /* accent_chair.usdz */ = {isa = PBXFileReference; lastKnownFileType = file; path = accent_chair.usdz; sourceTree = "<group>"; };
@@ -203,6 +199,7 @@
 				227AB6932BCA5AEF00358840 /* Homey.AI */,
 				227AB6922BCA5AEF00358840 /* Products */,
 				226CD7A52BE08AE5005342F7 /* Frameworks */,
+				22F12E1E2D12B2C60034B383 /* usdz */,
 			);
 			sourceTree = "<group>";
 		};
@@ -227,9 +224,7 @@
 				22B1A2132CED330D0026A7E6 /* coffee_table.usdz */,
 				22B1A2172CED3EF70026A7E6 /* white_sofa.usdz */,
 				22B1A2152CED3DBD0026A7E6 /* accent_chair.usdz */,
-				227AB6942BCA5AEF00358840 /* AppDelegate.swift */,
 				226CD7AB2BE0B89F005342F7 /* HomeyAIApp.swift */,
-				229713992BE12A9A004103E9 /* StorageService.swift */,
 				222E75562BD284D10073EB02 /* UnsupportedDeviceView.swift */,
 				222E75522BD282F20073EB02 /* RoomPlanView.swift */,
 				22DF2B5A2BF1B12100A43071 /* preferenceImg */,
@@ -292,6 +287,13 @@
 				22009A532BDCBD4D00A6D88A /* futuristic.png */,
 			);
 			path = preferenceImg;
+			sourceTree = "<group>";
+		};
+		22F12E1E2D12B2C60034B383 /* usdz */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = usdz;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -442,8 +444,6 @@
 				222E75622BD2A6170073EB02 /* CaptureRoom.swift in Sources */,
 				2213950B2BD7F42D00B651F8 /* ChatInterfaceView.swift in Sources */,
 				226CD7AC2BE0B89F005342F7 /* HomeyAIApp.swift in Sources */,
-				227AB6952BCA5AEF00358840 /* AppDelegate.swift in Sources */,
-				2297139A2BE12A9A004103E9 /* StorageService.swift in Sources */,
 				2297139C2BE12E61004103E9 /* RemoteImage.swift in Sources */,
 				22CDC2932CA4BB8B00A97C93 /* InteriorDesignView.swift in Sources */,
 				22DF2B682BF1BC7900A43071 /* S3Manager.swift in Sources */,

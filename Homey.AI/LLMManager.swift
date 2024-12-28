@@ -391,11 +391,3 @@ enum SenderRole: String, Codable {
     case user, system, assistant
 }
 
-struct OpenAIChatResponse: Decodable{
-    let choices: [OpenAIChatChoice]
-}
-
-struct OpenAIChatChoice: Decodable{
-    let message: OpenAIChatMessage
-}
-

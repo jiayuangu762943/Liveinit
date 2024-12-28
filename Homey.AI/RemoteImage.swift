@@ -7,16 +7,17 @@
 
 import Foundation
 import SwiftUI
+import FirebaseStorage
 
 struct RemoteImage: View {
     @StateObject private var imageLoader = ImageLoader()
     @State private var image: UIImage? = nil
     var name: String
 
-    // Computed property to construct the URL from 'name'
-    private var url: String {
-        let BUCKET_NAME = "homey-furniture-image" // Replace with your bucket name
-        return "https://storage.googleapis.com/\(BUCKET_NAME)/image/\(name)"
+    // Computed property to construct the image filename from 'name'
+    private var imageFileName: String {
+        let extractedNumber = extractFirstNumber(from: name)! 
+        return "\(extractedNumber).png"
     }
 
     var body: some View {
@@ -24,6 +25,7 @@ struct RemoteImage: View {
             if let uiImage = imageLoader.image {
                 Image(uiImage: uiImage)
                     .resizable()
+                    .aspectRatio(contentMode: .fit)
             } else {
                 // Placeholder while loading
                 Rectangle()
@@ -32,49 +34,43 @@ struct RemoteImage: View {
                         ProgressView()
                     )
                     .onAppear {
-                        imageLoader.loadImage(from: url)
+                        imageLoader.loadImage(imageName: imageFileName)
                     }
             }
         }
     }
 }
 
+// MARK: - ImageLoader Class
+
 class ImageLoader: ObservableObject {
     @Published var image: UIImage?
 
-    func loadImage(from urlString: String) {
-        // Step 1: Retrieve OAuth token (replace with your implementation)
-        fetchOAuthToken { [weak self] token in
-            guard let self = self, let token = token, let url = URL(string: urlString) else {
+    /// Loads an image from Firebase Storage given its filename.
+    /// - Parameter imageName: The name of the image file to download.
+    func loadImage(imageName: String) {
+        // Step 1: Reference Firebase Storage
+        let storageRef = Storage.storage(url: "gs://temporal-ground-437002-b8.firebasestorage.app").reference()
+        let imageRef = storageRef.child("onehundredImgs").child(imageName)
+
+        // Step 2: Download image data
+        // Set a reasonable max size (e.g., 5MB)
+        imageRef.getData(maxSize: 5 * 1024 * 1024) { [weak self] data, error in
+            if let error = error {
+                print("Error downloading image '\(imageName)': \(error.localizedDescription)")
                 return
             }
-
-            // Step 2: Create URL request and add OAuth token to the header
-            var request = URLRequest(url: url)
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-            // Step 3: Perform network request
-            let task = URLSession.shared.dataTask(with: request) { data, response, error in
-                if let data = data, let uiImage = UIImage(data: data) {
-                    DispatchQueue.main.async {
-                        self.image = uiImage
-                    }
-                } else {
-                    print("Failed to load image from URL: \(urlString), error: \(error?.localizedDescription ?? "Unknown error")")
-                }
+            guard let data = data else {
+                print("No data received for image '\(imageName)'.")
+                return
             }
-            task.resume()
+            if let uiImage = UIImage(data: data) {
+                DispatchQueue.main.async {
+                    self?.image = uiImage
+                }
+            } else {
+                print("Failed to convert data to UIImage for image '\(imageName)'.")
+            }
         }
-    }
-
-    // Function to fetch OAuth token (you need to implement it based on your authentication flow)
-    private func fetchOAuthToken(completion: @escaping (String?) -> Void) {
-        // Replace with your actual logic to get an OAuth token.
-        // For example, use Firebase, Google Sign-In SDK, or App Service Account credentials.
-        
-        // Example using Google Cloud SDK to get a token
-        // You might use `gcloud auth` or use a service account to get a token.
-        let token = Constants.accessToken // Replace with actual OAuth token fetching logic
-        completion(token)
     }
 }

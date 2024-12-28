@@ -1,8 +1,8 @@
 //
 //  CaptureRoom.swift
-//  YourAppName
+//  Homey.AI
 //
-//  Created by Your Name on Date.
+//  Created by 顾嘉元 on 2024/4/30.
 //
 
 import SwiftUI
@@ -11,6 +11,23 @@ import UIKit
 import FirebaseStorage
 
 // MARK: - Data Models for the Provided JSON Structure
+struct OpenAIChatResponse: Decodable {
+    let id: String
+    let object: String
+    let created: Int
+    let choices: [Choice]
+}
+
+struct Choice: Decodable {
+    let index: Int
+    let message: Message
+    let finish_reason: String?
+}
+
+struct Message: Decodable {
+    let role: String
+    let content: String
+}
 
 struct ProductLabel: Decodable {
     let key: String
@@ -70,6 +87,25 @@ struct BulkResponse: Codable {
     let products: [ProductTransform]
 }
 
+// MARK: - Global Function to Extract Number
+
+func extractFirstNumber(from input: String) -> String? {
+    // Split the string by "/"
+    let components = input.split(separator: "/")
+    
+    for component in components {
+        if component.hasPrefix("product_id") || component.hasPrefix("image") {
+            // Extract digits from the component
+            let number = component.filter { "0123456789".contains($0) }
+            if !number.isEmpty {
+                return String(number)
+            }
+        }
+    }
+    
+    return nil
+}
+
 // MARK: - SwiftUI View
 
 struct CaptureRoomView: View {
@@ -78,7 +114,11 @@ struct CaptureRoomView: View {
     @State var selectedImage: UIImage
     @Binding var searchResponse: [ProductGroupedResult]
     @State private var isBottomSheetPresented = false
-    @State private var isSceneInitialized = false
+    
+    // Mapping from product.id to extractedNumber
+    @State private var idToNumberMap: [Int: String] = [:]
+    // Maximum number of iterations
+    let maxIterations = 5
     
     var body: some View {
         NavigationView {
@@ -86,10 +126,7 @@ struct CaptureRoomView: View {
                 ZStack {
                     SCNViewContainer { view in
                         scnView = view
-                        if !isSceneInitialized {
-                            clearScene()
-                            isSceneInitialized = true
-                        }
+//                        clearScene()
                     }
                 }
             }
@@ -108,12 +145,10 @@ struct CaptureRoomView: View {
                 }
             )
             .onAppear {
-                // On appear, load models if we have grouped results
+                // On appear, start the iterative placement process if there are grouped results
                 print("onAppear: searchResponse")
-                print(searchResponse)
                 if !searchResponse.isEmpty {
-                    
-                    loadModelsIntoScene()
+                    startIterativePlacement()
                 }
             }
             .sheet(isPresented: $isBottomSheetPresented) {
@@ -133,151 +168,181 @@ struct CaptureRoomView: View {
         .navigationViewStyle(StackNavigationViewStyle())
     }
     
-    
     // Clear the scene
     func clearScene() {
         if let scnView = self.scnView {
             if scnView.scene == nil {
                 scnView.scene = SCNScene()
             }
-            if let objects = (scnView.scene?.rootNode.childNode(withName: "Object_grp", recursively: true)) {
+            if let objects = scnView.scene?.rootNode.childNode(withName: "Object_grp", recursively: true) {
                 objects.removeFromParentNode()
             }
         }
     }
     
-    // MARK: - Load Models into Scene
-    // We use top product from each boundingPoly in productGroupedResults to load models
-    func loadModelsIntoScene() {
-        print("loadModelsIntoScene: \(searchResponse.count)")
-       let productEntries = searchResponse.enumerated().compactMap { (index, groupedResult) -> (Int, ProductResult, BoundingPoly)? in
-           guard let topProduct = groupedResult.results.first else { return nil }
-           return (index, topProduct, groupedResult.boundingPoly)
-       }
+    // MARK: - Iterative Placement Process
+    func startIterativePlacement() {
+        performIteration(currentIteration: 1)
+    }
+    
+    func performIteration(currentIteration: Int) {
+        guard currentIteration <= maxIterations else {
+            print("Reached maximum number of iterations.")
+            return
+        }
         
-        // Create a dispatch group to manage async tasks
-        let dispatchGroup = DispatchGroup()
-        var downloadedIndexes: [Int] = []
-        for (index, product, _) in productEntries {
-            dispatchGroup.enter()
-            downloadModel(index: index, product: product) {
-                downloadedIndexes.append(index)
-                dispatchGroup.leave()
+        print("Starting iteration \(currentIteration)")
+        
+        // Load models into the scene based on current transforms
+        loadModelsIntoScene(iteration: currentIteration) { success in
+            if success {
+                // Take snapshot of the current scene
+                if let snapshot = self.takeSnapshot() {
+                    // Send snapshot to LLM to get updated transforms
+                    self.sendSnapshotToLLM(snapshot: snapshot) { newTransforms in
+                        if let newTransforms = newTransforms, !newTransforms.isEmpty {
+                            // Update the transforms
+                            self.updateTransforms(with: newTransforms)
+                            
+                            // Proceed to next iteration
+                            self.performIteration(currentIteration: currentIteration + 1)
+                        } else {
+                            print("No updates from LLM. Terminating iterations.")
+                        }
+                    }
+                } else {
+                    print("Failed to take snapshot.")
+                }
+            } else {
+                print("Failed to load models into scene.")
             }
         }
-
-        dispatchGroup.notify(queue: .main, execute:{
-            // Now that all models are downloaded, call once to get all transformations
-            let productsData: [[String: Any]] = productEntries.map { (index, product, poly) in
-                let vertices = poly.normalizedVertices.map { ["x": $0.x ?? 0, "y": $0.y ?? 0] }
-                return [
-                  "id": index,
-                  "name": product.product.displayName ?? "furniture",
-                  "boundingPoly": vertices
-                ]
+    }
+    
+    // MARK: - Load Models into Scene (Skip Re-Download, Skip Re-Add if Already Added)
+    func loadModelsIntoScene(iteration: Int, completion: @escaping (Bool) -> Void) {
+        guard let scnView = self.scnView else {
+            completion(false)
+            return
+        }
+        
+        print("loadModelsIntoScene: \(searchResponse.count)")
+        
+        // Gather product entries
+        let productEntries = searchResponse.enumerated().compactMap {
+            (index, groupedResult) -> (Int, ProductResult, BoundingPoly, String)? in
+            guard let topProduct = groupedResult.results.first else { return nil }
+            guard let extractedNumber = extractFirstNumber(from: topProduct.image) else { return nil }
+            return (index, topProduct, groupedResult.boundingPoly, extractedNumber)
+        }
+        print("productEntries: \(productEntries)")
+        
+        // We want to (1) download them only if needed, (2) then add them if they're not already in the scene
+        let downloadGroup = DispatchGroup()
+        
+        for (index, product, _, number) in productEntries {
+            downloadGroup.enter()
+            downloadModel(index: index, product: product, extractedNumber: number) {
+                // Store the index->number mapping
+                idToNumberMap[index] = number
+                downloadGroup.leave()
             }
-
-            self.getAllPositionsAndOrientations(productsData: productsData) { transformDict in
-                // Apply the transforms
-                for (index, transform) in transformDict {
-                    // We already downloaded the model file at "index"
-                    let localURL = self.localURLForIndex(index)
-                    self.addModelToScene(from: localURL, transform: transform, index: index)
+        }
+        
+        downloadGroup.notify(queue: .main) {
+            print("All models downloaded (or already existed). Now place them if not placed yet.")
+            
+            // Add node if not already present (with a default or identity transform).
+            for (index, _, _, _) in productEntries {
+                let nodeName = "model_\(index)"
+                if scnView.scene?.rootNode.childNode(withName: nodeName, recursively: true) == nil {
+                    // Node does not exist yet, so add it at default transform.
+                    if let number = self.idToNumberMap[index] {
+                        let localURL = self.localURLForNumber(number)
+                        self.addModelIfNeeded(from: localURL, index: index)
+                    }
+                } else {
+                    // Already in the scene from a previous iteration
+                    // (We do nothing here; will just transform it in updateTransforms.)
                 }
             }
-        })
+            
+            // Return success
+            completion(true)
+        }
     }
-    func downloadModel(index: Int, product: ProductResult, completion: @escaping () -> Void) {
-        let modelFileName = "\(index + 1).usdz"
+    
+    /// Checks if local file already exists. If not, downloads from Firebase.
+    func downloadModel(index: Int, product: ProductResult, extractedNumber: String, completion: @escaping () -> Void) {
+        let modelFileName = "\(extractedNumber).usdz"
+        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let localURL = documentsDirectory.appendingPathComponent(modelFileName)
+        
+        // If already exists, skip downloading
+        if FileManager.default.fileExists(atPath: localURL.path) {
+            print("Model file already exists locally: \(localURL.path). Skipping download.")
+            completion()
+            return
+        }
+        
+        // Otherwise, download from Firebase
         let storageRef = Storage.storage(url: "gs://temporal-ground-437002-b8.firebasestorage.app").reference()
         let modelRef = storageRef.child("onehundred").child(modelFileName)
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-        let localURL = documentsDirectory?.appendingPathComponent(modelFileName)
-
-        modelRef.write(toFile: localURL!) { url, error in
+        
+        modelRef.write(toFile: localURL) { url, error in
             if let error = error {
                 print("Error downloading file: \(error.localizedDescription)")
             } else {
-                print("Downloaded model to: \(localURL!)")
+                print("Downloaded model to: \(localURL)")
             }
             completion()
         }
     }
-//    
-//    func downloadAndAddModel(product: ProductResult, boundingPoly: BoundingPoly, index: Int) {
-//        // Convert product name to a stable identifier to name the model file, e.g. "1.usdz", "2.usdz", ...
-//        // For demonstration, we just use index for naming.
-//        print("downloadAndAddModel")
-//        let modelFileName = "\(index + 1).usdz"
-//        
-//        // TODO: Adjust the Firebase storage path as needed. For demonstration:
-//        let storageRef = Storage.storage(url: "gs://temporal-ground-437002-b8.firebasestorage.app").reference()
-//        let modelRef = storageRef.child("onehundred").child(modelFileName)
-//        
-//        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-//        let localURL = documentsDirectory?.appendingPathComponent(modelFileName)
-//        
-//        guard let localURL = localURL else {
-//            print("Could not create local URL for model.")
-//            return
-//        }
-//        
-//        // Download the model file
-//        modelRef.write(toFile: localURL) { url, error in
-//            if let error = error {
-//                print("Error downloading file: \(error.localizedDescription)")
-//            } else {
-//                print("Downloaded model to: \(localURL)")
-//                // After downloading, get position and orientation from OpenAI
-//                self.getPositionAndOrientation(for: product, boundingPoly: boundingPoly) { result in
-//                    switch result {
-//                    case .success(let transform):
-//                        self.addModelToScene(from: localURL, transform: transform, index: index)
-//                    case .failure(let error):
-//                        print("Error getting position and orientation: \(error.localizedDescription)")
-//                        // Proceed with a default transform if needed
-//                        let defaultTransform = SCNMatrix4Identity
-//                        self.addModelToScene(from: localURL, transform: defaultTransform, index: index)
-//                    }
-//                }
-//            }
-//        }
-//    }
     
-    func parseBulkResponse(data: Data) throws -> [Int: SCNMatrix4] {
-        let decoder = JSONDecoder()
-        let openAIResponse = try JSONSerialization.jsonObject(with: data, options: []) as? [String:Any]
+    /// Add the model node to the scene only if not already present
+    private func addModelIfNeeded(from localURL: URL, index: Int) {
+        guard let scnView = self.scnView else { return }
         
-        // Extract the content from the "choices"
-        guard
-          let choices = openAIResponse?["choices"] as? [[String: Any]],
-          let message = choices.first?["message"] as? [String:Any],
-          let content = message["content"] as? String,
-          let contentData = content.data(using: .utf8)
-        else {
-            throw NSError(domain: "Missing or invalid content", code: -1, userInfo: nil)
-        }
+        if FileManager.default.fileExists(atPath: localURL.path) {
+            do {
+                let modelScene = try SCNScene(url: localURL, options: nil)
+                let modelNode = SCNNode()
+                modelScene.rootNode.childNodes.forEach { modelNode.addChildNode($0) }
+                
+                // Give it a default transform. For instance:
+                // - Identity position
+                // - A small pitch so that it's “standing” (depending on your models)
+                var transform = SCNMatrix4Identity
+//                transform = SCNMatrix4Rotate(transform, -90 * .pi / 180, 1, 0, 0)
+                modelNode.transform = transform
+                modelNode.position.x = -1 * modelNode.position.x
 
-        let bulkResponse = try decoder.decode(BulkResponse.self, from: contentData)
-        
-        var result: [Int: SCNMatrix4] = [:]
-        for product in bulkResponse.products {
-            var transform = SCNMatrix4Identity
-            transform = SCNMatrix4Translate(transform, product.position.x, product.position.y, product.position.z)
-            transform = SCNMatrix4Rotate(transform, product.orientation.rotationX * .pi / 180, 1, 0, 0)
-            transform = SCNMatrix4Rotate(transform, product.orientation.rotationY * .pi / 180, 0, 1, 0)
-            transform = SCNMatrix4Rotate(transform, product.orientation.rotationZ * .pi / 180, 0, 0, 1)
-            result[product.id] = transform
+                // Scale down if needed
+                modelNode.scale = SCNVector3(0.3048, 0.3048, 0.3048)
+                
+                // Name the node
+                modelNode.name = "model_\(index)"
+                
+                scnView.scene?.rootNode.addChildNode(modelNode)
+                print("Successfully added model \(index) to scene (with default transform).")
+            } catch {
+                print("Error loading model: \(error.localizedDescription)")
+            }
+        } else {
+            print("Model file does not exist at: \(localURL.path)")
         }
-        return result
     }
     
     
-    func localURLForIndex(_ index: Int) -> URL {
-        let modelFileName = "\(index + 1).usdz"
+    
+    // MARK: - Local URL for Number
+    func localURLForNumber(_ number: String) -> URL {
+        let modelFileName = "\(number).usdz"
         let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         return documentsDirectory.appendingPathComponent(modelFileName)
     }
+    
+    // MARK: - JSON String Conversion
     func jsonString(from object: Any) -> String {
         guard let data = try? JSONSerialization.data(withJSONObject: object, options: []),
               let json = String(data: data, encoding: .utf8) else {
@@ -286,254 +351,194 @@ struct CaptureRoomView: View {
         return json
     }
     
+
+    // MARK: - Get OpenAI API Key
+    func getOpenAIAPIKey() -> String? {
+        return Constants.OPENAI_API_KEY
+    }
     
-    func getAllPositionsAndOrientations(productsData: [[String:Any]], completion: @escaping ([Int: SCNMatrix4]) -> Void) {
+    // MARK: - Take Snapshot
+    func takeSnapshot() -> UIImage? {
+        guard let scnView = self.scnView else { return nil }
+        let snapshot = scnView.snapshot()
+        return snapshot
+    }
+    
+    // MARK: - Send Snapshot to LLM (One Call Per Iteration)
+    func sendSnapshotToLLM(snapshot: UIImage, completion: @escaping ([Int: SCNMatrix4]?) -> Void) {
         guard let apiKey = getOpenAIAPIKey() else {
-            completion([:])
+            completion(nil)
             return
         }
-
+        
+        guard let imageData = snapshot.pngData() else {
+            print("Failed to convert snapshot to PNG data.")
+            completion(nil)
+            return
+        }
+        
+        let base64Image = imageData.base64EncodedString()
+        
+        // Build a JSON chunk for the LLM. For now, you might just send a textual prompt,
+        // or combine it with boundingPoly, etc., whichever makes sense.
+        // For illustration, we’ll show the same prompt you had earlier:
+        
+        let productEntries = searchResponse.enumerated().compactMap {
+            (index, groupedResult) -> (Int, ProductResult, BoundingPoly, String)? in
+            guard let topProduct = groupedResult.results.first else { return nil }
+            guard let extractedNumber = extractFirstNumber(from: topProduct.image) else { return nil }
+            return (index, topProduct, groupedResult.boundingPoly, extractedNumber)
+        }
+        let productsData: [[String: Any]] = productEntries.map { (index, product, poly, number) in
+            let vertices = poly.normalizedVertices.map {
+                ["x": $0.x ?? 0, "y": $0.y ?? 0]
+            }
+            return [
+                "id": index,
+                "name": product.product.displayName ?? "furniture",
+                "boundingPoly": vertices,
+                "number": number
+            ]
+        }
+        
         let prompt = """
-        You are a professional interior designer. I have several products with bounding polygons in a room scene. For each product, provide the optimal 3D position and orientation (in degrees).
+        You are a professional interior designer. I have several products with bounding polygons in a room scene. \
+        For each product, provide the 3D position and orientation (in degrees). \
+        Scale the x and z coordinates to the range from 0 to 3.48 which is the room's dimension. \ 
+        Spread furnitures out as much as possible by having a high variance of x and z coordinates. \
+        The furnitures' are all 0.5 by 0.5. Place furniture so that they are upright and they don't collide into each other! \
+        
 
         Input (JSON):
-        \(jsonString(from: productsData)) // Convert dictionary to JSON string
+        \(jsonString(from: productsData))
 
         For each product in the "products" array, return a JSON with the same structure:
         {
           "products": [
             {
               "id": 0,
-              "position": { "x":1.0, "y":0.0, "z":-2.0 },
+              "position": { "x":1.0, "y":0.0, "z":2.0 },
               "orientation": { "rotationX":0, "rotationY":90, "rotationZ":0 }
             },
             ...
           ]
         }
 
-        The furniture should remain upright (no pitch rotation).
+        IMPORTANT: Return only a valid JSON object without any code fences, formatting, or additional text. Use two decimal places.
         """
         
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
+        let imageDataURL = "data:image/jpeg;base64,\(base64Image)"
+        
+        guard let requestURL = URL(string: "https://api.openai.com/v1/chat/completions") else {
+            print("Invalid OpenAI API URL.")
+            completion(nil)
+            return
+        }
+        
+        var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
         request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         
         let requestBody: [String: Any] = [
-          "model": "gpt-4o",
-          "messages": [
-             ["role": "user", "content": prompt]
-          ],
-          "max_tokens": 500,
-          "temperature": 0.7
+            "model": "gpt-4o",  // or your own model name
+            "messages": [
+                [
+                    "role": "system",
+                    "content": "You are a professional interior designer. Return only valid JSON (no code fences and no ` charater)."
+                ],
+                [
+                    "role": "user",
+                    "content": [
+                        ["type": "text", "text": prompt],
+                        ["type": "image_url", "image_url": ["url": imageDataURL]]
+                    ]
+                ]
+            ],
+            "max_tokens": 1500,
+            "temperature": 0.7
         ]
         
         request.httpBody = try? JSONSerialization.data(withJSONObject: requestBody)
         
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
-          if let error = error {
-             print("Error: \(error)")
-             completion([:])
-             return
-          }
-          guard let data = data else {
-             print("No data received")
-             completion([:])
-             return
-          }
-          
-          // Parse the response similar to before, but now expecting a JSON with multiple products
-          if let responseString = String(data: data, encoding: .utf8) {
-              print("OpenAI Bulk Response: \(responseString)")
-          }
-
-          // Decode the JSON and convert each product's position/orientation into SCNMatrix4
-          do {
-              let transformDict = try self.parseBulkResponse(data: data)
-              completion(transformDict)
-          } catch {
-              print("Failed to parse bulk response: \(error)")
-              completion([:])
-          }
-        }
-        task.resume()
-    }
-    
-    // MARK: - Get Position and Orientation (with boundingPoly info)
-    func getPositionAndOrientation(for product: ProductResult, boundingPoly: BoundingPoly, completion: @escaping (Result<SCNMatrix4, Error>) -> Void) {
-        guard let base64Image = imageToBase64(self.selectedImage) else {
-            completion(.failure(NSError(domain: "Image encoding error", code: -1, userInfo: nil)))
-            return
-        }
-        
-        // Construct the prompt with bounding polygon details
-        let polyDescription = boundingPoly.normalizedVertices.enumerated().map { (i, v) -> String in
-            "Vertex \(i): x=\(v.x ?? 0), y=\(v.y ?? 0)"
-        }.joined(separator: "; ")
-        
-        let productName = (product.product.displayName?.trimmingCharacters(in: .whitespaces).isEmpty == false) ? product.product.displayName! : "furniture"
-        let prompt = """
-        You are a professional interior designer, please provide the optimal 3D position and orientation (in degrees) for placing a '\(productName)' in a room scene. The normalized bounding polygon for the detected product is: \(polyDescription) with (0,0) being the top left and (1,1) being the bottom right corner of the image. 
-        Return the position as x, y, z coordinates and orientation as rotationX, rotationY, rotationZ in degrees.
-        Use this output format:
-        position: x=1.0, y=0.0, z=-2.0
-        Orientation: rotationX=0, rotationY=90, rotationZ=0.
-        The furniture should remain upright (no pitch rotation).
-        """
-        
-        guard let apiKey = getOpenAIAPIKey() else {
-            completion(.failure(NSError(domain: "API key not found", code: -1, userInfo: nil)))
-            return
-        }
-        
-        let url = URL(string: "https://api.openai.com/v1/chat/completions")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let requestBody: [String: Any] = [
-            "model": "gpt-4o",
-            "messages": [
-                ["role": "user", "content": prompt],
-                ["role": "user", "content": "Image (Base64): \(base64Image)"]
-            ],
-            "max_tokens": 150,
-            "n": 1,
-            "temperature": 0.7
-        ]
-        
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody, options: [])
-        } catch {
-            completion(.failure(error))
-            return
-        }
-        
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
-                completion(.failure(error))
+                print("Error sending snapshot to LLM: \(error)")
+                completion(nil)
                 return
             }
-            
             guard let data = data else {
-                completion(.failure(NSError(domain: "No data received", code: -1, userInfo: nil)))
+                print("No data received from LLM.")
+                completion(nil)
                 return
             }
             
-            // Print the raw response for debugging
             if let responseString = String(data: data, encoding: .utf8) {
-                print("OpenAI Raw Response: \(responseString)")
+                print("LLM Response: \(responseString)")
             }
             
+            // Attempt to parse the "content" as BulkResponse
             do {
-                let transform = try self.parsePositionAndOrientation(from: data)
-                print("Received transform from OpenAI:", transform)
-                completion(.success(transform))
+                let jsonResponse = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)
+                if let content = jsonResponse.choices.first?.message.content {
+                    let decoder = JSONDecoder()
+                    let updatedBulkResponse = try decoder.decode(BulkResponse.self,
+                                                                from: content.data(using: .utf8)!)
+                    // Convert BulkResponse → [Int : SCNMatrix4]
+                    var transformDict: [Int: SCNMatrix4] = [:]
+                    for product in updatedBulkResponse.products {
+                        var transform = SCNMatrix4Identity
+                        // Position
+                        transform = SCNMatrix4Translate(transform,
+                                                        -1 * product.position.x,
+                                                        product.position.y,
+                                                        product.position.z)
+                        // Rotation
+                        transform = SCNMatrix4Rotate(transform,
+                                                     product.orientation.rotationX * .pi / 180,
+                                                     1, 0, 0)
+                        transform = SCNMatrix4Rotate(transform,
+                                                     product.orientation.rotationY * .pi / 180,
+                                                     0, 1, 0)
+                        transform = SCNMatrix4Rotate(transform,
+                                                     product.orientation.rotationZ * .pi / 180,
+                                                     0, 0, 1)
+                        // Pitch up furniture
+                        transform = SCNMatrix4Rotate(transform, -90 * .pi / 180, 1, 0, 0)
+                        
+                        transformDict[product.id] = transform
+                    }
+                    completion(transformDict)
+                } else {
+                    print("No content in LLM response.")
+                    completion(nil)
+                }
             } catch {
-                completion(.failure(error))
+                print("Error parsing LLM response: \(error)")
+                completion(nil)
             }
         }
         task.resume()
     }
     
-    func imageToBase64(_ image: UIImage) -> String? {
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-            print("Failed to convert image to JPEG format")
-            return nil
-        }
-        return imageData.base64EncodedString()
-    }
-    
-    func parsePositionAndOrientation(from data: Data) throws -> SCNMatrix4 {
-        let jsonResponse = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
-
-        if let choices = jsonResponse?["choices"] as? [[String: Any]],
-           let message = choices.first?["message"] as? [String: Any],
-           let content = message["content"] as? String {
-            let transform = self.transformFromString(content)
-            return transform
-        } else {
-            throw NSError(domain: "Failed to parse position and orientation", code: -1, userInfo: nil)
-        }
-    }
-
-    func transformFromString(_ string: String) -> SCNMatrix4 {
-        var position = SCNVector3(0, 0, 0)
-        var rotation = SCNVector3(0, 0, 0)
-
-        let positionPattern = "position:\\s*x=([-\\d\\.]+),\\s*y=([-\\d\\.]+),\\s*z=([-\\d\\.]+)"
-        let rotationPattern = "Orientation:\\s*rotationX=([-\\d\\.]+),\\s*rotationY=([-\\d\\.]+),\\s*rotationZ=([-\\d\\.]+)"
-
-        if let positionRegex = try? NSRegularExpression(pattern: positionPattern, options: []),
-           let match = positionRegex.firstMatch(in: string, options: [], range: NSRange(location: 0, length: string.count)) {
-            if let xRange = Range(match.range(at: 1), in: string),
-               let yRange = Range(match.range(at: 2), in: string),
-               let zRange = Range(match.range(at: 3), in: string) {
-                position.x = Float(string[xRange]) ?? 0
-                position.y = Float(string[yRange]) ?? 0
-                position.z = Float(string[zRange]) ?? 0
-            }
-        }
-
-        if let rotationRegex = try? NSRegularExpression(pattern: rotationPattern, options: []),
-           let match = rotationRegex.firstMatch(in: string, options: [], range: NSRange(location: 0, length: string.count)) {
-            if let xRange = Range(match.range(at: 1), in: string),
-               let yRange = Range(match.range(at: 2), in: string),
-               let zRange = Range(match.range(at: 3), in: string) {
-                rotation.x = Float(string[xRange]) ?? 0
-                rotation.y = Float(string[yRange]) ?? 0
-                rotation.z = Float(string[zRange]) ?? 0
-            }
-        }
-
-        var transform = SCNMatrix4Identity
-        transform = SCNMatrix4Translate(transform, position.x, position.y, position.z)
-        transform = SCNMatrix4Rotate(transform, rotation.x * .pi / 180, 1, 0, 0)
-        transform = SCNMatrix4Rotate(transform, rotation.y * .pi / 180, 0, 1, 0)
-        transform = SCNMatrix4Rotate(transform, rotation.z * .pi / 180, 0, 0, 1)
-
-        return transform
-    }
-
-    // MARK: - Add Model to Scene
-    func addModelToScene(from localURL: URL, transform: SCNMatrix4, index: Int) {
+    // MARK: - Update Trafnsforms
+    func updateTransforms(with newTransforms: [Int: SCNMatrix4]) {
         DispatchQueue.main.async {
             guard let scnView = self.scnView else { return }
-
-            if FileManager.default.fileExists(atPath: localURL.path) {
-                do {
-                    let modelScene = try SCNScene(url: localURL, options: nil)
-                    let modelNode = SCNNode()
-
-                    for child in modelScene.rootNode.childNodes {
-                        modelNode.addChildNode(child)
-                    }
+            
+            for (id, transform) in newTransforms {
+                let nodeName = "model_\(id)"
+                if let modelNode = scnView.scene?.rootNode.childNode(withName: nodeName, recursively: true) {
                     
-                    
-                    let upward = SCNMatrix4Rotate(transform, -Float.pi/2, 1, 0, 0)
-                    // Apply the transform and scale
-                    modelNode.transform = upward
-                    modelNode.scale = SCNVector3(1, 1, 1)
+                    modelNode.transform = transform
+                    modelNode.scale = SCNVector3(0.75, 0.75, 0.75)
 
-                    // Position model on the floor by default (assuming y = -1 is the floor)
-                    modelNode.position.y = -1
-
-                    scnView.scene?.rootNode.addChildNode(modelNode)
-                    print("Successfully added model to scene")
-                    
-                } catch {
-                    print("Error loading model: \(error.localizedDescription)")
+                    print("Updated transform for model \(id)")
+                } else {
+                    print("Model node with id \(id) not found in scene.")
                 }
-            } else {
-                print("Model file does not exist at path: \(localURL.path)")
             }
         }
-    }
-
-    // MARK: - Get OpenAI API Key
-    func getOpenAIAPIKey() -> String? {
-        return Constants.OPENAI_API_KEY
     }
 }
 
@@ -548,6 +553,7 @@ struct ProductSheetView: View {
                 ForEach(Array(searchResults.enumerated()), id: \.offset) { index, result in
                     ProductCardView(product: result, index: index)
                         .onTapGesture {
+                            
                             // Handle product selection if needed
                         }
                 }
@@ -563,13 +569,26 @@ struct ProductCardView: View {
 
     var body: some View {
         HStack {
-            RemoteImage(name: product.image)
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 100, height: 100)
-                .cornerRadius(10)
+            // Extract number from product.image and construct "35.png"
+            if let imageNumber = extractFirstNumber(from: product.image) {
+                RemoteImage(name: "\(imageNumber).png")
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 100, height: 100)
+                    .cornerRadius(10)
+            } else {
+                // Placeholder image if extraction fails
+                Rectangle()
+                    .foregroundColor(Color(UIColor.systemGray5))
+                    .frame(width: 100, height: 100)
+                    .cornerRadius(10)
+                    .overlay(
+                        Text("No Image")
+                            .foregroundColor(.white)
+                    )
+            }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(product.product.displayName ?? "")
+                Text(product.product.displayName ?? "Unnamed Product")
                     .font(.headline)
                     .lineLimit(1)
                 Text("Category: \(product.product.productCategory)")
@@ -586,5 +605,3 @@ struct ProductCardView: View {
         .shadow(radius: 5)
     }
 }
-
-

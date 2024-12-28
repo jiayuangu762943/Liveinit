@@ -17,7 +17,7 @@ struct InteriorDesignView: View {
     // Replace these with actual images in your assets
     let styleImages: [String: [String]] = [
         "Scandinavian": ["scandinavian1", "scandinavian2", "scandinavian3", "scandinavian4"],
-        "Minimalistic": ["studio_bedroom", "studio_bedroom2", "studio_bedroom3", "studio_bedroom4"],
+        "Minimalistic": ["minimalist1", "minimalist2"],
         "Organic Modern": ["organic1", "organic2", "organic3", "organic4"]
     ]
 
@@ -208,18 +208,17 @@ struct InteriorDesignView: View {
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             print("decoding")
             let productSearchAPIResponse = try decoder.decode(ProductSearchAPIResponse.self, from: data)
-            print("decoded")
+            print("interior design view : decoded")
             // Extracting product search results
             if let productSearchResults = productSearchAPIResponse.responses.first?.productSearchResults {
                 // Extracting top-level results (not grouped) for the ProductSheetView
                 
                 let allGroupedProductResults = productSearchResults.productGroupedResults
-               
+                let limitedResults = Array(productSearchResults.productGroupedResults.prefix(4))
                 
                 // Assign to searchResults
                 DispatchQueue.main.async {
                     self.searchResults = allGroupedProductResults
-                    print("searchResults assigned: \(self.searchResults)")
                     self.showCaptureRoomView = true
                 }
                 
