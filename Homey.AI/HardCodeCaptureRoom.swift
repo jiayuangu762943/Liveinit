@@ -1,114 +1,20 @@
 //
-//  CaptureRoom.swift
+//  HardCodeCaptureRoom.swift
 //  Homey.AI
 //
-//  Created by 顾嘉元 on 2024/4/30.
+//  Created by 顾嘉元 on 2025/1/16.
 //
+
 
 import SwiftUI
 import SceneKit
 import UIKit
 import FirebaseStorage
 
-// MARK: - Data Models for the Provided JSON Structure
-struct OpenAIChatResponse: Decodable {
-    let id: String?
-    let object: String?
-    let created: Int?
-    let choices: [Choice]
-}
-
-struct Choice: Decodable {
-    let index: Int
-    let message: Message
-    let finish_reason: String?
-}
-
-struct Message: Decodable {
-    let role: String
-    let content: String
-}
-
-struct ProductLabel: Decodable {
-    let key: String
-    let value: String
-}
-
-struct ProductInfo: Decodable {
-    let name: String
-    let displayName: String?
-    let productCategory: String
-    let productLabels: [ProductLabel]?
-}
-
-struct ProductResult: Decodable {
-    let product: ProductInfo
-    let score: Float
-    let image: String
-}
-
-struct NormalizedVertex: Decodable {
-    let x: Float?
-    let y: Float?
-}
-
-struct BoundingPoly: Decodable {
-    let normalizedVertices: [NormalizedVertex]
-}
-
-struct ProductGroupedResult: Decodable {
-    let boundingPoly: BoundingPoly
-    let results: [ProductResult]
-}
-
-struct ProductSearchResults: Decodable {
-    let indexTime: String
-    let results: [ProductResult]
-    let productGroupedResults: [ProductGroupedResult]
-}
-
-struct ResponseItem: Decodable {
-    let productSearchResults: ProductSearchResults
-}
-
-struct ProductSearchAPIResponse: Decodable {
-    let responses: [ResponseItem]
-}
-
-struct BulkResponse: Codable {
-    struct ProductTransform: Codable {
-        let id: Int
-        let position: Position
-        let orientation: Orientation
-    }
-    struct Position: Codable { let x: Float; let y: Float; let z: Float }
-    struct Orientation: Codable { let rotationX: Float; let rotationY: Float; let rotationZ: Float }
-
-    let products: [ProductTransform]
-}
-
-// MARK: - Global Function to Extract Number
-
-func extractFirstNumber(from input: String) -> String? {
-    // Split the string by "/"
-    let components = input.split(separator: "/")
-    
-    for component in components {
-        if component.hasPrefix("product_id") || component.hasPrefix("image") {
-            // Extract digits from the component
-            let number = component.filter { "0123456789".contains($0) }
-            if !number.isEmpty {
-                return String(number)
-            }
-        }
-    }
-    
-    return nil
-}
 
 // MARK: - SwiftUI View
 
-struct CaptureRoomView: View {
+struct HardCodeCaptureRoom: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var scnView: SCNView?
     @State var selectedImage: UIImage
@@ -207,7 +113,7 @@ struct CaptureRoomView: View {
 //                        if let newTransforms = newTransforms, !newTransforms.isEmpty {
 //                            // Update the transforms
 //                            self.updateTransforms(with: newTransforms)
-//                            
+//
 //                            // Proceed to next iteration
 //                            self.performIteration(currentIteration: currentIteration + 1)
 //                        } else {
@@ -482,7 +388,7 @@ struct CaptureRoomView: View {
 
         Input (JSON):
                         //           \(jsonString(from: productsData)) \
-        For each product in the input json, provide plain-English instructions on how I should move or rotate each piece of furniture in the 3D scene, which only varies along the X and Z axes in 0–3.48, to make the layout more meaningful. Example: "Move product 0 +0.2 along the x-axis and rotate 90 degrees along the y-axis clockwise."
+        For each product in the input json, provide plain-English instructions on how I should move or rotate each piece of furniture in the 3D scene, which only varies along the X and Z axes in 0–3.48, to make the layout more meaningful. Example: "Move product 0 +0.2 along the x-axis."
             
         Return only textual instructions in a friendly, concise format. 
         """
@@ -564,7 +470,7 @@ struct CaptureRoomView: View {
         
         // Now take the snapshot
         let snapshot = scnView.snapshot()
-//        
+//
 //        guard let imageData = snapshot.pngData() else {
 //            print("Failed to convert snapshot to PNG data.")
 //            return nil
@@ -577,15 +483,7 @@ struct CaptureRoomView: View {
 //        } catch {
 //            print("Failed to write snapshot: \(error)")
 //        }
-        
-        // 2) Scale it down to, say, 300×300
-        let targetSize = CGSize(width: 300, height: 300)
-        UIGraphicsBeginImageContextWithOptions(targetSize, false, 1.0)
-        snapshot.draw(in: CGRect(origin: .zero, size: targetSize))
-        let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        
-        return resizedImage
+        return snapshot
     }
     func compressedImageData(from image: UIImage, quality: CGFloat = 0.3) -> Data? {
         // Adjust quality from 0.0 to 1.0 (lowest to highest)
@@ -594,224 +492,68 @@ struct CaptureRoomView: View {
     
     // MARK: - Send Snapshot to LLM (One Call Per Iteration)
     func requestPositionsAndOrientations(instruction: String, completion: @escaping ([Int : SCNMatrix4]?) -> Void) {
-        guard let apiKey = getOpenAIAPIKey() else {
-            completion(nil)
-            return
-        }
+        // 1) Define a hardcoded BulkResponse with desired transforms
+        //    Adjust the "id" and x/y/z/rotation values as needed
+        let hardcodedBulkResponse = BulkResponse(products: [
+            BulkResponse.ProductTransform(
+                id: 0,
+                position: .init(x: 0.50, y: 0.00, z: 0.50),
+                orientation: .init(rotationX: 90, rotationY: 0, rotationZ: 0)
+            ),
+            BulkResponse.ProductTransform(
+                id: 1,
+                position: .init(x: 3.00, y: 0.00, z: 0.50),
+                orientation: .init(rotationX: 90, rotationY: 0, rotationZ: 0)
+            ),
+            BulkResponse.ProductTransform(
+                id: 2,
+                position: .init(x: 1.75, y: 0.00, z: 1.75),
+                orientation: .init(rotationX: 90, rotationY: 0, rotationZ: 0)
+            ),
+            BulkResponse.ProductTransform(
+                id: 3,
+                position: .init(x: 0.50, y: 0.00, z: 3.00),
+                orientation: .init(rotationX: 90, rotationY: 0, rotationZ: 0)
+            ),
+            BulkResponse.ProductTransform(
+                id: 4,
+                position: .init(x: 2.00, y: 0.00, z: 2.50),
+                orientation: .init(rotationX: 90, rotationY: 0, rotationZ: 0)
+            ),
+            BulkResponse.ProductTransform(
+                id: 5,
+                position: .init(x: 2.50, y: 0.00, z: 1.00),
+                orientation: .init(rotationX: 90, rotationY: 0, rotationZ: 0)
+            )
+        ])
         
-//        guard let imageData = snapshot.pngData() else {
-//            print("Failed to convert snapshot to PNG data.")
-//            completion(nil)
-//            return
-//        }
-//        
-//        let base64Image = imageData.base64EncodedString()
-        
-        // Build a JSON chunk for the LLM. For now, you might just send a textual prompt,
-        // or combine it with boundingPoly, etc., whichever makes sense.
-        // For illustration, we’ll show the same prompt you had earlier:
-        
-        let productEntries = searchResponse.enumerated().compactMap {
-            (index, groupedResult) -> (Int, ProductResult, BoundingPoly, String)? in
-            guard let topProduct = groupedResult.results.first else { return nil }
-            guard let extractedNumber = extractFirstNumber(from: topProduct.image) else { return nil }
-            return (index, topProduct, groupedResult.boundingPoly, extractedNumber)
-        }
-        let productsData: [[String: Any]] = productEntries.map { (index, product, poly, number) in
-            let vertices = poly.normalizedVertices.map {
-                ["x": $0.x ?? 0, "y": $0.y ?? 0]
-            }
-            return [
-                "id": index,
-                "name": product.product.displayName ?? "furniture",
-                "boundingPoly": vertices,
-                "number": number
-            ]
-        }
-        print("Previous Positions and Orientation: \(self.lastPosOrienString)")
-//        let prompt = """
-//        You are an area generator expert. Given an area of a certain size, you can generate a list of items that are appropriate to that area, in the right place.\
-//           Input (JSON):
-//           \(jsonString(from: productsData)) \
-//
-//           For each product in the "products" array, return a JSON with the same structure:
-//           {
-//             "products": [
-//               {
-//                 "id": 0,
-//                 "position": { "x":1.0, "y":0.0, "z":2.0 },
-//                 "orientation": { "rotationX":0, "rotationY":90, "rotationZ":0 }
-//               },
-//               ...
-//             ]
-//           } \
-//        
-//        Keep in mind, objects should be placed in the area to create the most meaningful layout possible, and they shouldn't overlap.\
-//
-//        Scale the x and z coordinates to the range from 0 to 3.48 which is the room's dimension. \ 
-//        Spread furnitures out as much as possible by having a high variance of x and z coordinates. \
-//        All objects must be within the bounds of the area size; Never place objects further than 1/2 the length or 1/2 the depth of the area from the origin.\
-//        The furnitures' are all 0.6 by 0.6. Place furniture so that they are upright and they don't collide into each other! \
-//
-//        
-//
-//        IMPORTANT: Return only a valid JSON object without any code fences, formatting, or additional text. Use two decimal places.
-//        """
-        
-        let prompt = """
-        You are an expert in 3D interior design with a strong math background. 
-        Update Instructions: \(instruction)
-        Previous Positions and Orientation: \(self.lastPosOrienString)
-        Products (JSON):
-        //           \(jsonString(from: productsData)) \
-        
-        Your task:
-        - Use the instructions to update the X, Y, Z positions (in meters) and rotationX, rotationY, rotationZ (in degrees) for each product so that:
-            * They remain within the 0–3.48 boundary on the X and Z axes.
-            * They do not collide with each other.
-            * Each piece of furniture is oriented correctly and pitched by +90 degrees if needed.
-        - Return only valid JSON in the following format (without code fences or extra text). Use two decimal places for all floats:
-
-        {
-          "products": [
-            {
-              "id": 0,
-              "position": { "x": 1.00, "y": 0.00, "z": 2.00 },
-              "orientation": { "rotationX": 0.00, "rotationY": 90.00, "rotationZ": 0.00 }
-            },
-            ...
-          ]
-        }
-
-        IMPORTANT: Return only a valid JSON object without any code fences, formatting, or additional text. Use two decimal places.
-
-        """
-
-//        let imageDataURL = "data:image/jpeg;base64,\(base64Image)"
-        
-        guard let requestURL = URL(string: "https://api.openai.com/v1/chat/completions") else {
-            print("Invalid OpenAI API URL.")
-            completion(nil)
-            return
-        }
-        
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "POST"
-        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        
-//        guard let roomimageData = selectedImage.pngData() else {
-//            print("Failed to convert selectedImage to PNG data.")
-//            completion(nil)
-//            return
-//        }
-//        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-//        let tempURL = documentsDir.appendingPathComponent("debug_snapshot.png")
-//        do {
-//            try imageData.write(to: tempURL)
-//            print("Wrote snapshot to: \(tempURL.path)")
-//        } catch {
-//            print("Failed to write snapshot: \(error)")
-//        }
-//        let roomBase64Image = roomimageData.base64EncodedString()
-//        let roomImageURL = "data:image/jpeg;base64,\(roomBase64Image)"
-
-        let requestBody: [String: Any] = [
-            "model": "gpt-4o",  // or your own model name
-            "messages": [
-                [
-                    "role": "system",
-                    "content": "You are an expert in 3D interior design with a strong math background. Given an area of a certain size, you can generate a list of items that are appropriate to that area, in the right place. Return only a valid JSON (no code fences and no ` charater) and nothing else."
-                ],
-                [
-                    "role": "user",
-                    "content": [
-                        ["type": "text", "text": prompt],
-//                        ["type": "image_url", "image_url": ["url": imageDataURL]],
-//                        ["type": "image_url", "image_url": ["url": roomImageURL]]
-                    ]
-                ]
-            ],
-//            "max_tokens": 1500,
-//            "temperature": 0.7
-        ]
-        
-        request.httpBody = try? JSONSerialization.data(withJSONObject: requestBody)
-        
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("Error sending snapshot to LLM: \(error)")
-                completion(nil)
-                return
-            }
-            guard let data = data else {
-                print("No data received from LLM.")
-                completion(nil)
-                return
-            }
+        // 2) Convert the hardcoded BulkResponse to [Int: SCNMatrix4]
+        var transformDict: [Int : SCNMatrix4] = [:]
+        for product in hardcodedBulkResponse.products {
+            var transform = SCNMatrix4Identity
             
-            if let responseString = String(data: data, encoding: .utf8) {
-//                print("LLM Response: \(responseString)")
-//                self.lastPosOrienString = responseString
-            }
+            // Position
+            // (If you want negative X, keep -1* product.position.x)
+            transform = SCNMatrix4Translate(
+                transform,
+                product.position.x,
+                product.position.y,
+                product.position.z
+            )
             
-            // Attempt to parse the "content" as BulkResponse
-            do {
-                let jsonResponse = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)
-                if let content = jsonResponse.choices.first?.message.content {
-                    let decoder = JSONDecoder()
-                    let updatedBulkResponse = try decoder.decode(BulkResponse.self,
-                                                                from: content.data(using: .utf8)!)
-                    
-                    let encoder = JSONEncoder()
-                    encoder.outputFormatting = [.prettyPrinted] // optional for readable indentation
-                    // 2) Encode the array of products
-                    let data = try encoder.encode(updatedBulkResponse.products)
-                    // 3) Convert Data to String
-                    if let jsonString = String(data: data, encoding: .utf8) {
-                        self.lastPosOrienString = jsonString
-                        
-                    } else {
-                        print("Failed to convert products JSON to String.")
-                    }
-                    
-                    
-                    // Convert BulkResponse → [Int : SCNMatrix4]
-                    var transformDict: [Int: SCNMatrix4] = [:]
-                    for product in updatedBulkResponse.products {
-                        var transform = SCNMatrix4Identity
-                        // Position
-                        transform = SCNMatrix4Translate(transform,
-                                                        -1 * product.position.x,
-                                                        product.position.y,
-                                                        product.position.z)
-                        // Rotation
-                        transform = SCNMatrix4Rotate(transform,
-                                                     product.orientation.rotationX * .pi / 180,
-                                                     1, 0, 0)
-                        transform = SCNMatrix4Rotate(transform,
-                                                     product.orientation.rotationY * .pi / 180,
-                                                     0, 1, 0)
-                        transform = SCNMatrix4Rotate(transform,
-                                                     product.orientation.rotationZ * .pi / 180,
-                                                     0, 0, 1)
-                        // Pitch up furniture
-                        transform = SCNMatrix4Rotate(transform, -90 * .pi / 180, 1, 0, 0)
-                        
-                        transformDict[product.id] = transform
-                    }
-                    completion(transformDict)
-                } else {
-                    print("No content in LLM response.")
-                    completion(nil)
-                }
-            } catch {
-                print("Error parsing LLM response: \(error)")
-                completion(nil)
-            }
+            // Rotation
+            transform = SCNMatrix4Rotate(transform, product.orientation.rotationX * .pi / 180, 1, 0, 0)
+            transform = SCNMatrix4Rotate(transform, product.orientation.rotationY * .pi / 180, 0, 1, 0)
+            transform = SCNMatrix4Rotate(transform, product.orientation.rotationZ * .pi / 180, 0, 0, 1)
+            
+            // Additional pitch if you want it (as in original code)
+            transform = SCNMatrix4Rotate(transform, -90 * .pi / 180, 1, 0, 0)
+            
+            transformDict[product.id] = transform
         }
-        task.resume()
+        
+        // 3) Directly call completion with the hardcoded transforms
+        completion(transformDict)
     }
     
     // MARK: - Update Trafnsforms
@@ -832,69 +574,5 @@ struct CaptureRoomView: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - ProductSheetView
-
-struct ProductSheetView: View {
-    let searchResults: [ProductResult]
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                ForEach(Array(searchResults.enumerated()), id: \.offset) { index, result in
-                    ProductCardView(product: result, index: index)
-                        .onTapGesture {
-                            
-                            // Handle product selection if needed
-                        }
-                }
-            }
-            .padding()
-        }
-    }
-}
-
-struct ProductCardView: View {
-    var product: ProductResult
-    var index: Int
-
-    var body: some View {
-        HStack {
-            // Extract number from product.image and construct "35.png"
-            if let imageNumber = extractFirstNumber(from: product.image) {
-                RemoteImage(name: "\(imageNumber).png")
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 100, height: 100)
-                    .cornerRadius(10)
-            } else {
-                // Placeholder image if extraction fails
-                Rectangle()
-                    .foregroundColor(Color(UIColor.systemGray5))
-                    .frame(width: 100, height: 100)
-                    .cornerRadius(10)
-                    .overlay(
-                        Text("No Image")
-                            .foregroundColor(.white)
-                    )
-            }
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(product.product.displayName ?? "Unnamed Product")
-                    .font(.headline)
-                    .lineLimit(1)
-                Text("Category: \(product.product.productCategory)")
-                    .font(.subheadline)
-                    .lineLimit(1)
-                Text(String(format: "Score: %.2f", product.score))
-                    .font(.subheadline)
-            }
-            Spacer()
-        }
-        .padding()
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(10)
-        .shadow(radius: 5)
     }
 }

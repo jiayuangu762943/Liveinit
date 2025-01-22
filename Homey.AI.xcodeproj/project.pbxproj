@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		22009A512BDCBB4A00A6D88A /* wooden.png in Resources */ = {isa = PBXBuildFile; fileRef = 22009A502BDCBB4A00A6D88A /* wooden.png */; };
 		22047BE52BD8A86D00219F54 /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22047BE42BD8A86D00219F54 /* Model.swift */; };
-		2213950B2BD7F42D00B651F8 /* ChatInterfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2213950A2BD7F42D00B651F8 /* ChatInterfaceView.swift */; };
 		221CDD852BDF5C16006D796A /* Amplify in Frameworks */ = {isa = PBXBuildFile; productRef = 221CDD842BDF5C16006D796A /* Amplify */; };
 		221F302C2CA3648C004B9972 /* landing.png in Resources */ = {isa = PBXBuildFile; fileRef = 221F302B2CA3648C004B9972 /* landing.png */; };
 		222E75512BD27EEA0073EB02 /* RoomController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 222E75502BD27EEA0073EB02 /* RoomController.swift */; };
@@ -46,6 +45,7 @@
 		225FDB092CD176A7002F1518 /* FirebaseVertexAI in Frameworks */ = {isa = PBXBuildFile; productRef = 225FDB082CD176A7002F1518 /* FirebaseVertexAI */; };
 		226CD7A72BE08AE5005342F7 /* AWSCognitoAuthPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = 226CD7A62BE08AE5005342F7 /* AWSCognitoAuthPlugin */; };
 		226CD7AC2BE0B89F005342F7 /* HomeyAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226CD7AB2BE0B89F005342F7 /* HomeyAIApp.swift */; };
+		2272E5C02D38B31200390B46 /* HardCodeCaptureRoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2272E5BF2D38B30B00390B46 /* HardCodeCaptureRoom.swift */; };
 		22771F5B2BD516B100BBAE3B /* Home.usdz in Resources */ = {isa = PBXBuildFile; fileRef = 22771F5A2BD516B100BBAE3B /* Home.usdz */; };
 		227AB6972BCA5AEF00358840 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227AB6962BCA5AEF00358840 /* ContentView.swift */; };
 		227AB6992BCA5AF200358840 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 227AB6982BCA5AF200358840 /* Assets.xcassets */; };
@@ -94,7 +94,6 @@
 		22009A522BDCBCC100A6D88A /* stone.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = stone.png; sourceTree = "<group>"; };
 		22009A532BDCBD4D00A6D88A /* futuristic.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = futuristic.png; sourceTree = "<group>"; };
 		22047BE42BD8A86D00219F54 /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
-		2213950A2BD7F42D00B651F8 /* ChatInterfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInterfaceView.swift; sourceTree = "<group>"; };
 		221F302B2CA3648C004B9972 /* landing.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = landing.png; sourceTree = "<group>"; };
 		222E75502BD27EEA0073EB02 /* RoomController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomController.swift; sourceTree = "<group>"; };
 		222E75522BD282F20073EB02 /* RoomPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomPlanView.swift; sourceTree = "<group>"; };
@@ -106,6 +105,7 @@
 		224E05602CA8EE0900057334 /* SCNViewContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SCNViewContainer.swift; sourceTree = "<group>"; };
 		226CD7A82BE08B0D005342F7 /* Homey-AI-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Homey-AI-Info.plist"; sourceTree = SOURCE_ROOT; };
 		226CD7AB2BE0B89F005342F7 /* HomeyAIApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeyAIApp.swift; sourceTree = "<group>"; };
+		2272E5BF2D38B30B00390B46 /* HardCodeCaptureRoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardCodeCaptureRoom.swift; sourceTree = "<group>"; };
 		22771F5A2BD516B100BBAE3B /* Home.usdz */ = {isa = PBXFileReference; lastKnownFileType = file.usdz; path = Home.usdz; sourceTree = "<group>"; };
 		227AB6912BCA5AEF00358840 /* Homey.AI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Homey.AI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		227AB6962BCA5AEF00358840 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -230,9 +230,9 @@
 				22DF2B5A2BF1B12100A43071 /* preferenceImg */,
 				222E75612BD2A6170073EB02 /* CaptureRoom.swift */,
 				224E05602CA8EE0900057334 /* SCNViewContainer.swift */,
+				2272E5BF2D38B30B00390B46 /* HardCodeCaptureRoom.swift */,
 				22D97C1F2C9FD51E00A5CCEE /* CallPython.swift */,
 				228459C52CE7D89D00CB1CEF /* try.usdz */,
-				2213950A2BD7F42D00B651F8 /* ChatInterfaceView.swift */,
 				222E75502BD27EEA0073EB02 /* RoomController.swift */,
 				22771F5A2BD516B100BBAE3B /* Home.usdz */,
 				22E5F65C2BD530E60039AC45 /* Home.scn */,
@@ -442,7 +442,6 @@
 				22D97C202C9FD51E00A5CCEE /* CallPython.swift in Sources */,
 				222E75532BD282F20073EB02 /* RoomPlanView.swift in Sources */,
 				222E75622BD2A6170073EB02 /* CaptureRoom.swift in Sources */,
-				2213950B2BD7F42D00B651F8 /* ChatInterfaceView.swift in Sources */,
 				226CD7AC2BE0B89F005342F7 /* HomeyAIApp.swift in Sources */,
 				2297139C2BE12E61004103E9 /* RemoteImage.swift in Sources */,
 				22CDC2932CA4BB8B00A97C93 /* InteriorDesignView.swift in Sources */,
@@ -450,6 +449,7 @@
 				222EB7C42BDBC8F100C662BF /* UserPreferenceView1.swift in Sources */,
 				222E75602BD29F750073EB02 /* Constants.swift in Sources */,
 				22047BE52BD8A86D00219F54 /* Model.swift in Sources */,
+				2272E5C02D38B31200390B46 /* HardCodeCaptureRoom.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
