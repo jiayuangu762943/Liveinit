@@ -31,3 +31,11 @@ struct SCNViewContainer: UIViewRepresentable {
     }
     
 }
+
+
+#Preview {
+    SCNViewContainer { sceneView in
+        print("Scene is ready for preview!")
+    }
+    .frame(width: 300, height: 300)
+}

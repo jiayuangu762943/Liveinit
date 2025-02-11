@@ -18,7 +18,7 @@ struct InteriorDesignView: View {
     let styleImages: [String: [String]] = [
         "Scandinavian": ["scandinavian1", "scandinavian2", "scandinavian3", "scandinavian4"],
         "Minimalistic": ["minimalist1", "minimalist2"],
-        "Organic Modern": ["fc783f56b59b2149e638503950fb94b5", "organic1", "organic2", "organic3", "organic4"]
+        "Organic Modern": ["OM-4", "organic1", "organic2", "organic3", "organic4"]
     ]
 
     let PROJECT_ID = Constants.PROJECT_ID
@@ -137,9 +137,8 @@ struct InteriorDesignView: View {
         .padding(.vertical)
         .fullScreenCover(isPresented: $showCaptureRoomView) {
             if let selectedImage = selectedRoomImage {
-//                CaptureRoomView(selectedImage: selectedImage, searchResponse: $searchResults)
-                
-                LareinaTestRoom()
+                CaptureRoomView(selectedImage: selectedImage, searchResponse: $searchResults)
+//                LareinaTestRoom()
             }
         }
     }
