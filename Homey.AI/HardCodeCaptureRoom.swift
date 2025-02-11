@@ -71,20 +71,31 @@ struct CaptureRoomView: View {
     @State var selectedImage: UIImage
     @Binding var searchResponse: [ProductGroupedResult]
     @State private var isBottomSheetPresented = false
+    @State private var wallColor: UIColor = .white
     
     // A dictionary of hardcoded transforms for each product ID.
     // Adjust these values (positions/rotations) as you like.
     // productID -> (position + orientation)
     //dimension: z ~ 4.5
-    let hardcodedTransforms: [Int: (x: Float, y: Float, z: Float,
-                                    rotX: Float, rotY: Float, rotZ: Float)] = [
-        0: (x: 3.8,  y: 0.0, z: 1.0, rotX: 0.0, rotY: 0.0, rotZ: 0.0),
-        1: (x: 1.5,  y: 0.0, z: 3.5, rotX: 0.0, rotY: 90.0, rotZ: 0.0),
-        2: (x: 2.5,  y: 0.0, z: 3.5, rotX: 0.0, rotY: 45.0, rotZ: 0.0),
-        3: (x: 3.8,  y: 0.0, z: 3.5, rotX: 0.0, rotY: 0.0, rotZ: 0.0), //sofa c pattern
-        4: (x: 8.9,  y: 0.0, z: 1, rotX: 0.0, rotY: 0.0, rotZ: 0.0), //low back white
-        5: (x: 2.2,  y: 0.0, z: 2, rotX: 0.0, rotY: 0.0, rotZ: 0.0), //table
-        // ...add more if you have more products
+//    let hardcodedTransforms: [Int: (x: Float, y: Float, z: Float,
+//                                    rotX: Float, rotY: Float, rotZ: Float)] = [
+//        0: (x: 3.8,  y: 0.0, z: 1.0, rotX: 0.0, rotY: 0.0, rotZ: 0.0),
+//        1: (x: 1.5,  y: 0.0, z: 3.5, rotX: 0.0, rotY: 90.0, rotZ: 0.0),
+//        2: (x: 2.5,  y: 0.0, z: 3.5, rotX: 0.0, rotY: 45.0, rotZ: 0.0),
+//        3: (x: 3.8,  y: 0.0, z: 3.5, rotX: 0.0, rotY: 0.0, rotZ: 0.0), //sofa c pattern
+//        4: (x: 8.9,  y: 0.0, z: 1, rotX: 0.0, rotY: 0.0, rotZ: 0.0), //low back white
+//        5: (x: 2.2,  y: 0.0, z: 2, rotX: 0.0, rotY: 0.0, rotZ: 0.0), //table
+//        // ...add more if you have more products
+//    ]
+
+    // HANDCRAFTED - OM-4
+    let hardcodedTransforms: [String: (x: Float, y: Float, z: Float, rotX: Float, rotY: Float, rotZ: Float)] = [
+        "product_id27": (x: 0.5,  y: -0.4, z: 0.2, rotX: 0.0, rotY: -65.0, rotZ: 0.0), // brown_chair
+        "product_id18": (x: 2.5,  y: -0.8, z: 0.5, rotX: 0.0, rotY: 82.0, rotZ: 0.0), // sofa
+        "product_id20": (x: 1.8,  y: -0.9, z: 2, rotX: 0.0, rotY: 82.0, rotZ: 0.0), // table
+        "product_id30": (x: 3.5,  y: -0.4, z: 3.5, rotX: 0.0, rotY: -90.0, rotZ: 0.0), // pink_chair
+        "product_id31": (x: 4.5,  y: -0.4, z: 1.5, rotX: 0.0, rotY: -120.0, rotZ: 0.0), // blue_chair
+        "product_id40": (x: -0.5,  y: -0.4, z: 2, rotX: 0.0, rotY: -90.0, rotZ: 0.0), // white_chair
     ]
 
     var body: some View {
@@ -121,11 +132,22 @@ struct CaptureRoomView: View {
                 setupCustomCamera(for: scnView)
                 
                 // 2) For each product, load its USDZ model and apply the hardcoded transform
+//                for i in 0..<searchResponse.count {
+//                    loadModelIfNeeded(productID: i) {
+//                        // After the model is loaded, apply the transform (if we have one for this ID).
+//                        if let transformData = hardcodedTransforms[i] {
+//                            applyHardcodedTransform(productID: i, transformData: transformData)
+//                        }
+//                    }
+//                }
+                
                 for i in 0..<searchResponse.count {
                     loadModelIfNeeded(productID: i) {
                         // After the model is loaded, apply the transform (if we have one for this ID).
-                        if let transformData = hardcodedTransforms[i] {
-                            applyHardcodedTransform(productID: i, transformData: transformData)
+                        let groupedResult = searchResponse[i]
+                        if let topProduct = groupedResult.results.first,
+                           let productIDString = extractProductID(from: topProduct.image) {
+                            applyHardcodedTransform(productID: i, productIDString: productIDString)
                         }
                     }
                 }
@@ -149,6 +171,16 @@ struct CaptureRoomView: View {
 
 // MARK: - SceneKit Helpers
 extension CaptureRoomView {
+    func extractProductID(from input: String) -> String? {
+        let components = input.split(separator: "/")
+        for component in components {
+            if component.hasPrefix("product_id") {
+                return String(component)
+            }
+        }
+        return nil
+    }
+    
     func setupCustomCamera(for scnView: SCNView) {
         guard let scene = scnView.scene else { return }
 
@@ -233,46 +265,93 @@ extension CaptureRoomView {
     }
 
     // Hardcode transform application
+//    func applyHardcodedTransform(
+//        productID: Int,
+//        transformData: (x: Float, y: Float, z: Float,
+//                        rotX: Float, rotY: Float, rotZ: Float)
+//    ) {
+//        guard let scnView = self.scnView else { return }
+//        let nodeName = "model_\(productID)"
+//
+//        // Build the SCNMatrix4 from the stored floats
+//        var transform = SCNMatrix4Identity
+//
+//        // Position
+//        transform = SCNMatrix4Translate(transform,
+//                                        -transformData.x,
+//                                        transformData.y,
+//                                        transformData.z)
+//
+//        // Rotations in degrees -> convert to radians
+//        transform = SCNMatrix4Rotate(transform,
+//                                     transformData.rotX * .pi / 180,
+//                                     1, 0, 0)
+//        transform = SCNMatrix4Rotate(transform,
+//                                     transformData.rotY * .pi / 180,
+//                                     0, 1, 0)
+//        transform = SCNMatrix4Rotate(transform,
+//                                     transformData.rotZ * .pi / 180,
+//                                     0, 0, 1)
+//
+//        // Pitch furniture upright if needed (optional)
+//        transform = SCNMatrix4Rotate(transform, -90 * .pi/180, 1, 0, 0)
+//
+//        // Apply to the node
+//        DispatchQueue.main.async {
+//            if let modelNode = scnView.scene?.rootNode.childNode(withName: nodeName, recursively: true) {
+//                modelNode.transform = transform
+//                modelNode.scale = SCNVector3(0.75, 0.75, 0.75)
+//                print("Applied hardcoded transform for product \(productID)")
+//            } else {
+//                print("Node not found for product \(productID)")
+//            }
+//        }
+//    }
+    
     func applyHardcodedTransform(
         productID: Int,
-        transformData: (x: Float, y: Float, z: Float,
-                        rotX: Float, rotY: Float, rotZ: Float)
+        productIDString: String
     ) {
         guard let scnView = self.scnView else { return }
         let nodeName = "model_\(productID)"
 
-        // Build the SCNMatrix4 from the stored floats
-        var transform = SCNMatrix4Identity
+        // Look up the transform data using the product ID string
+        if let transformData = hardcodedTransforms[productIDString] {
+            // Build the SCNMatrix4 from the stored floats
+            var transform = SCNMatrix4Identity
 
-        // Position
-        transform = SCNMatrix4Translate(transform,
-                                        -transformData.x,
-                                        transformData.y,
-                                        transformData.z)
+            // Position
+            transform = SCNMatrix4Translate(transform,
+                                            -transformData.x,
+                                            transformData.y,
+                                            transformData.z)
 
-        // Rotations in degrees -> convert to radians
-        transform = SCNMatrix4Rotate(transform,
-                                     transformData.rotX * .pi / 180,
-                                     1, 0, 0)
-        transform = SCNMatrix4Rotate(transform,
-                                     transformData.rotY * .pi / 180,
-                                     0, 1, 0)
-        transform = SCNMatrix4Rotate(transform,
-                                     transformData.rotZ * .pi / 180,
-                                     0, 0, 1)
+            // Rotations in degrees -> convert to radians
+            transform = SCNMatrix4Rotate(transform,
+                                         transformData.rotX * .pi / 180,
+                                         1, 0, 0)
+            transform = SCNMatrix4Rotate(transform,
+                                         transformData.rotY * .pi / 180,
+                                         0, 1, 0)
+            transform = SCNMatrix4Rotate(transform,
+                                         transformData.rotZ * .pi / 180,
+                                         0, 0, 1)
 
-        // Pitch furniture upright if needed (optional)
-        transform = SCNMatrix4Rotate(transform, -90 * .pi/180, 1, 0, 0)
+            // Pitch furniture upright if needed (optional)
+            transform = SCNMatrix4Rotate(transform, -90 * .pi/180, 1, 0, 0)
 
-        // Apply to the node
-        DispatchQueue.main.async {
-            if let modelNode = scnView.scene?.rootNode.childNode(withName: nodeName, recursively: true) {
-                modelNode.transform = transform
-                modelNode.scale = SCNVector3(0.75, 0.75, 0.75)
-                print("Applied hardcoded transform for product \(productID)")
-            } else {
-                print("Node not found for product \(productID)")
+            // Apply to the node
+            DispatchQueue.main.async {
+                if let modelNode = scnView.scene?.rootNode.childNode(withName: nodeName, recursively: true) {
+                    modelNode.transform = transform
+                    modelNode.scale = SCNVector3(0.75, 0.75, 0.75)
+                    print("Applied hardcoded transform for product \(productIDString)")
+                } else {
+                    print("Node not found for product \(productIDString)")
+                }
             }
+        } else {
+            print("No transform data found for product \(productIDString)")
         }
     }
 }
