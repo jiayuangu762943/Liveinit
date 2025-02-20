@@ -71,7 +71,6 @@ struct CaptureRoomView: View {
     @State var selectedImage: UIImage
     @Binding var searchResponse: [ProductGroupedResult]
     @State private var isBottomSheetPresented = false
-    @State private var wallColor: UIColor = .white
     
     // A dictionary of hardcoded transforms for each product ID.
     // Adjust these values (positions/rotations) as you like.
@@ -87,9 +86,9 @@ struct CaptureRoomView: View {
 //        5: (x: 2.2,  y: 0.0, z: 2, rotX: 0.0, rotY: 0.0, rotZ: 0.0), //table
 //        // ...add more if you have more products
 //    ]
-
-    // HANDCRAFTED - OM-4
-    let hardcodedTransforms: [String: (x: Float, y: Float, z: Float, rotX: Float, rotY: Float, rotZ: Float)] = [
+    
+    // Predefined hardcoded transformations
+    let transformsOM4: [String: (x: Float, y: Float, z: Float, rotX: Float, rotY: Float, rotZ: Float)] = [
         "product_id27": (x: 0.5,  y: -0.4, z: 0.2, rotX: 0.0, rotY: -65.0, rotZ: 0.0), // brown_chair
         "product_id18": (x: 2.5,  y: -0.8, z: 0.5, rotX: 0.0, rotY: 82.0, rotZ: 0.0), // sofa
         "product_id20": (x: 1.8,  y: -0.9, z: 2, rotX: 0.0, rotY: 82.0, rotZ: 0.0), // table
@@ -97,6 +96,27 @@ struct CaptureRoomView: View {
         "product_id31": (x: 4.5,  y: -0.4, z: 1.5, rotX: 0.0, rotY: -120.0, rotZ: 0.0), // blue_chair
         "product_id40": (x: -0.5,  y: -0.4, z: 2, rotX: 0.0, rotY: -90.0, rotZ: 0.0), // white_chair
     ]
+
+    let transformsMinimalist2: [String: (x: Float, y: Float, z: Float, rotX: Float, rotY: Float, rotZ: Float)] = [
+        "product_id5": (x: 1.8,  y: 0.0, z: 3, rotX: 0.0, rotY: 0.0, rotZ: 0.0), // table
+        "product_id27": (x: 0.5,  y: 0.0, z: 1, rotX: 0.0, rotY: 0.0, rotZ: 0.0), // brown_chair
+        "product_id30": (x: 3,  y: 0.0, z: 2, rotX: 0.0, rotY: 180, rotZ: 0.0), // pink_chair
+        "product_id36": (x: 3,  y: 0.0, z: 3.5, rotX: 0.0, rotY: -135, rotZ: 0.0), // beige_chair
+        "product_id40": (x: 1,  y: 0.0, z: 4, rotX: 0.0, rotY: 180, rotZ: 0.0), // white_chair
+        "product_id43": (x: 0.5, y: 0.0, z: 2, rotX: 0.0, rotY: 20.0, rotZ: 0.0), // white_sofa_chair
+    ]
+
+    // Function to determine the correct transform dictionary
+    func getHardcodedTransforms() -> [String: (x: Float, y: Float, z: Float, rotX: Float, rotY: Float, rotZ: Float)] {
+        if let imageName = selectedImage.imageAsset?.value(forKey: "assetName") as? String {
+            if imageName.contains("OM-4") {
+                return transformsOM4
+            } else if imageName.contains("minimalist2") {
+                return transformsMinimalist2
+            }
+        }
+        return [:] // Default to empty dictionary if no match
+    }
 
     var body: some View {
         NavigationView {
@@ -123,6 +143,8 @@ struct CaptureRoomView: View {
             )
             .onAppear {
                 print("onAppear: searchResponse")
+                print("====================================================")
+                print(selectedImage)
 
                 // 1) Make sure we have a scene
                 guard let scnView = self.scnView else { return }
@@ -140,6 +162,9 @@ struct CaptureRoomView: View {
 //                        }
 //                    }
 //                }
+                
+                // Determine the correct hardcoded transforms based on the image
+                let hardcodedTransforms = getHardcodedTransforms()
                 
                 for i in 0..<searchResponse.count {
                     loadModelIfNeeded(productID: i) {
@@ -314,6 +339,7 @@ extension CaptureRoomView {
     ) {
         guard let scnView = self.scnView else { return }
         let nodeName = "model_\(productID)"
+        let hardcodedTransforms = getHardcodedTransforms()
 
         // Look up the transform data using the product ID string
         if let transformData = hardcodedTransforms[productIDString] {
