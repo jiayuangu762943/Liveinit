@@ -87,6 +87,7 @@
 		22E5F6622BD618170039AC45 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = 22E5F6612BD618170039AC45 /* Alamofire */; };
 		22FD9FC32CC1593300EE227A /* chair_swan.usdz in Resources */ = {isa = PBXBuildFile; fileRef = 22FD9FC22CC1593300EE227A /* chair_swan.usdz */; };
 		8397F5462D4C425C0026C7E3 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8397F5452D4C424F0026C7E3 /* Constants.swift */; };
+		83994BB92D67D34200CD988D /* UserPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83994BB82D67D33500CD988D /* UserPrompt.swift */; };
 		83BE66342D52C175007B0882 /* LareinaTestRoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83BE66332D52C16F007B0882 /* LareinaTestRoom.swift */; };
 /* End PBXBuildFile section */
 
@@ -148,6 +149,7 @@
 		22E5F65C2BD530E60039AC45 /* Home.scn */ = {isa = PBXFileReference; lastKnownFileType = file.bplist; path = Home.scn; sourceTree = "<group>"; };
 		22FD9FC22CC1593300EE227A /* chair_swan.usdz */ = {isa = PBXFileReference; lastKnownFileType = file.usdz; path = chair_swan.usdz; sourceTree = "<group>"; };
 		8397F5452D4C424F0026C7E3 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
+		83994BB82D67D33500CD988D /* UserPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPrompt.swift; sourceTree = "<group>"; };
 		83BE66332D52C16F007B0882 /* LareinaTestRoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LareinaTestRoom.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -218,6 +220,7 @@
 		227AB6932BCA5AEF00358840 /* Homey.AI */ = {
 			isa = PBXGroup;
 			children = (
+				83994BB82D67D33500CD988D /* UserPrompt.swift */,
 				83BE66332D52C16F007B0882 /* LareinaTestRoom.swift */,
 				8397F5452D4C424F0026C7E3 /* Constants.swift */,
 				22D979282CD5D58B000EF2FB /* GoogleService-Info.plist */,
@@ -455,6 +458,7 @@
 				22DF2B682BF1BC7900A43071 /* S3Manager.swift in Sources */,
 				83BE66342D52C175007B0882 /* LareinaTestRoom.swift in Sources */,
 				222EB7C42BDBC8F100C662BF /* UserPreferenceView1.swift in Sources */,
+				83994BB92D67D34200CD988D /* UserPrompt.swift in Sources */,
 				222E75602BD29F750073EB02 /* Constants.swift in Sources */,
 				22047BE52BD8A86D00219F54 /* Model.swift in Sources */,
 				2272E5C02D38B31200390B46 /* HardCodeCaptureRoom.swift in Sources */,
