@@ -8,7 +8,6 @@
 import SwiftUI
 import SceneKit
 import UIKit
-import FirebaseStorage
 
 // MARK: - Data Models for the Provided JSON Structure
 struct OpenAIChatResponse: Decodable {
@@ -192,187 +191,134 @@ struct CaptureRoomView: View {
         }
         
         print("Starting iteration \(currentIteration)")
-        
-        // Load models into the scene based on current transforms
-        loadModelsIntoScene(iteration: currentIteration) { success in
-            if success {
-                if let scnView = self.scnView {
-                    // Create a top-down or angled camera
-                    setupCustomCamera(for: scnView)
+        let modelIdentifiers = ["11", "6", "76", "22"]
+//        let modelIdentifiers = ["1", "2", "3", "4"]
+        loadModelsIntoScene(modelIdentifiers: modelIdentifiers) {success in if success {
+            if let scnView = self.scnView {
+                setupCustomCamera(for: scnView)
+            }
+            
+//             request textual grid representation
+            self.requestTextualInstructions(referenceImage: self.selectedImage, sceneSnapshot: self.selectedImage) {instructionText in
+                guard let instructionText = instructionText else {
+                    print("No grid from LLM. stopping")
+                    return
                 }
-                // Take snapshot of the current scene
-                if let snapshot = self.takeSnapshot() {
-//                    // Send snapshot to LLM to get updated transforms
-//                    self.sendSnapshotToLLM(snapshot: snapshot) { newTransforms in
-//                        if let newTransforms = newTransforms, !newTransforms.isEmpty {
-//                            // Update the transforms
-//                            self.updateTransforms(with: newTransforms)
-//                            
-//                            // Proceed to next iteration
-//                            self.performIteration(currentIteration: currentIteration + 1)
-//                        } else {
-//                            print("No updates from LLM. Terminating iterations.")
-//                        }
-//                    }
-                    // 3) First step: get textual instructions
-                    if (currentIteration > 1){
-                        self.requestTextualInstructions(
-                            referenceImage: self.selectedImage,
-                            sceneSnapshot: snapshot
-                        ) { instructionText in
-                            
-                            guard let instructionText = instructionText else {
-                                print("No textual instructions from LLM. Stopping.")
-                                return
-                            }
-                            print("LLM textual instructions: \(instructionText)")
-                            
-                            // 4) Second step: convert instructions → updated positions/orientations JSON
-                            self.requestPositionsAndOrientations(
-                                instruction: instructionText
-                            ) { transformDict in
-                                guard let transformDict = transformDict, !transformDict.isEmpty else {
-                                    print("No transforms from LLM. Stopping.")
-                                    return
-                                }
-                                print("transformDict: \(transformDict)")
-                                // 5) Apply new transforms
-                                self.updateTransforms(with: transformDict)
-                                
-                                // 6) Next iteration
-                                self.performIteration(currentIteration: currentIteration + 1)
-                            }
-                        }
-                    }else{
-                        self.requestPositionsAndOrientations(
-                            instruction: "Place all models into scene"
-                        ) { transformDict in
-                            guard let transformDict = transformDict, !transformDict.isEmpty else {
-                                print("No transforms from LLM. Stopping.")
-                                return
-                            }
-                            print("transformDict: \(transformDict)")
-                            // 5) Apply new transforms
-                            self.updateTransforms(with: transformDict)
-                            
-                            // 6) Next iteration
-                            self.performIteration(currentIteration: currentIteration + 1)
-                        }
+                print("LLM grid layout: \(instructionText)")
+                
+                // extract furniture centers
+                let furnitureCenters = self.extractFurnitureCenters(from: instructionText)
+                print("Extracted furniture centers: \(furnitureCenters)")
+                
+                // convert 2D grid positiosn into 3D screenkit positions
+                var transformDict = [Int: SCNMatrix4]()
+                
+                for (char, centers) in furnitureCenters{
+                    if let productID = Int(String(char)), let center = centers.first {
+                        let (row, col) = center
+                        var transform = SCNMatrix4Identity
+                        let xPos = Float(col) // convert to meters
+                        let zPos = Float(row)
+                        
+                        transform = SCNMatrix4Translate(transform, -xPos, 0.0, zPos)
+                        
+                        // ensure furniture is correctly oriented
+                        let rotationAngle: Float = 0.0
+                        let rotationMatrix = SCNMatrix4MakeRotation(rotationAngle, 0, 1, 0)
+                        transform = SCNMatrix4Mult(transform, rotationMatrix)
+                        
+                        transformDict[productID] = transform
                     }
-                } else {
-                    print("Failed to take snapshot.")
                 }
-            } else {
-                print("Failed to load models into scene.")
+                
+//                 apply new transforms to scene
+                self.updateTransforms(with: transformDict)
+                
+//                 proceed to next iteration
+                self.performIteration(currentIteration: currentIteration + 1)
             }
         }
+            else {print("Failed to load models into scene ")}}
     }
     
     // MARK: - Load Models into Scene (Skip Re-Download, Skip Re-Add if Already Added)
-    func loadModelsIntoScene(iteration: Int, completion: @escaping (Bool) -> Void) {
+    func loadModelsIntoScene(modelIdentifiers: [String], completion: @escaping (Bool) -> Void) {
         guard let scnView = self.scnView else {
             completion(false)
             return
         }
-        
-        print("loadModelsIntoScene: \(searchResponse.count)")
-        
-        // Gather product entries
-        let productEntries = searchResponse.enumerated().compactMap {
-            (index, groupedResult) -> (Int, ProductResult, BoundingPoly, String)? in
-            guard let topProduct = groupedResult.results.first else { return nil }
-            guard let extractedNumber = extractFirstNumber(from: topProduct.image) else { return nil }
-            return (index, topProduct, groupedResult.boundingPoly, extractedNumber)
-        }
-//        print("productEntries: \(productEntries)")
-        
-        // We want to (1) download them only if needed, (2) then add them if they're not already in the scene
-        let downloadGroup = DispatchGroup()
-        
-        for (index, product, _, number) in productEntries {
-            downloadGroup.enter()
-            downloadModel(index: index, product: product, extractedNumber: number) {
-                // Store the index->number mapping
-                idToNumberMap[index] = number
-                downloadGroup.leave()
+
+        // Add node if not already present (with a default or identity transform).
+        for (index, number) in modelIdentifiers.enumerated() {
+            let nodeName = "model_\(index)"
+            if scnView.scene?.rootNode.childNode(withName: nodeName, recursively: true) == nil {
+                // Node does not exist yet, so add it at default transform.
+                let localURL = self.localURLForNumber(number)
+                self.addModelIfNeeded(from: localURL, index: index)
             }
         }
-        
-        downloadGroup.notify(queue: .main) {
-            print("All models downloaded (or already existed). Now place them if not placed yet.")
-            
-            // Add node if not already present (with a default or identity transform).
-            for (index, _, _, _) in productEntries {
-                let nodeName = "model_\(index)"
-                if scnView.scene?.rootNode.childNode(withName: nodeName, recursively: true) == nil {
-                    // Node does not exist yet, so add it at default transform.
-                    if let number = self.idToNumberMap[index] {
-                        let localURL = self.localURLForNumber(number)
-                        self.addModelIfNeeded(from: localURL, index: index)
-                    }
-                } else {
-                    // Already in the scene from a previous iteration
-                    // (We do nothing here; will just transform it in updateTransforms.)
-                }
-            }
-            
-            // Return success
-            completion(true)
-        }
+
+        // Return success
+        completion(true)
     }
     
     /// Checks if local file already exists. If not, downloads from Firebase.
-    func downloadModel(index: Int, product: ProductResult, extractedNumber: String, completion: @escaping () -> Void) {
-        let modelFileName = "\(extractedNumber).usdz"
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let localURL = documentsDirectory.appendingPathComponent(modelFileName)
-        
-        // If already exists, skip downloading
-        if FileManager.default.fileExists(atPath: localURL.path) {
-            print("Model file already exists locally: \(localURL.path). Skipping download.")
-            completion()
-            return
-        }
-        
-        // Otherwise, download from Firebase
-        let storageRef = Storage.storage(url: "gs://temporal-ground-437002-b8.firebasestorage.app").reference()
-        let modelRef = storageRef.child("onehundred").child(modelFileName)
-        
-        modelRef.write(toFile: localURL) { url, error in
-            if let error = error {
-                print("Error downloading file: \(error.localizedDescription)")
-            } else {
-                print("Downloaded model to: \(localURL)")
-            }
-            completion()
-        }
-    }
+//    func downloadModel(index: Int, product: ProductResult, extractedNumber: String, completion: @escaping () -> Void) {
+//        let modelFileName = "\(extractedNumber).usdz"
+//        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+//        let localURL = documentsDirectory.appendingPathComponent(modelFileName)
+//        
+//        // If already exists, skip downloading
+//        if FileManager.default.fileExists(atPath: localURL.path) {
+//            print("Model file already exists locally: \(localURL.path). Skipping download.")
+//            completion()
+//            return
+//        }
+//        
+//        // Otherwise, download from Firebase
+//        let storageRef = Storage.storage(url: "gs://temporal-ground-437002-b8.firebasestorage.app").reference()
+//        let modelRef = storageRef.child("onehundred").child(modelFileName)
+//        
+//        modelRef.write(toFile: localURL) { url, error in
+//            if let error = error {
+//                print("Error downloading file: \(error.localizedDescription)")
+//            } else {
+//                print("Downloaded model to: \(localURL)")
+//            }
+//            completion()
+//        }
+//    }
     
     /// Add the model node to the scene only if not already present
     private func addModelIfNeeded(from localURL: URL, index: Int) {
         guard let scnView = self.scnView else { return }
-        
+
         if FileManager.default.fileExists(atPath: localURL.path) {
             do {
                 let modelScene = try SCNScene(url: localURL, options: nil)
                 let modelNode = SCNNode()
                 modelScene.rootNode.childNodes.forEach { modelNode.addChildNode($0) }
-                
+
+                // Ensure model pivot is at its center
+                let (min, max) = modelNode.boundingBox
+                let center = SCNVector3((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2)
+                modelNode.pivot = SCNMatrix4MakeTranslation(-center.x, -center.y, -center.z)
+
                 // Give it a default transform. For instance:
                 // - Identity position
                 // - A small pitch so that it's “standing” (depending on your models)
+                modelNode.eulerAngles.x = 0
                 var transform = SCNMatrix4Identity
-//                transform = SCNMatrix4Rotate(transform, -90 * .pi / 180, 1, 0, 0)
+                transform = SCNMatrix4Rotate(transform, -90 * .pi / 180, 1, 0, 0)
+                transform = SCNMatrix4Rotate(transform, 0 * .pi / 180, 0, 1, 0)
+                transform = SCNMatrix4Rotate(transform, 0 * .pi / 180, 0, 0, 1)
                 modelNode.transform = transform
                 modelNode.position.x = -1 * modelNode.position.x
+                modelNode.scale = SCNVector3(0.75, 0.75, 0.75)
 
-                // Scale down if needed
-                
-//                modelNode.scale = SCNVector3(0.3048, 0.3048, 0.3048)
-                
                 // Name the node
                 modelNode.name = "model_\(index)"
-                
+
                 scnView.scene?.rootNode.addChildNode(modelNode)
                 print("Successfully added model \(index) to scene (with default transform).")
             } catch {
@@ -383,14 +329,26 @@ struct CaptureRoomView: View {
         }
     }
     
-    
+    func computeInverseRoomOffset() -> (position: SCNVector3, rotation: SCNVector4) {
+            let positionOffset = SCNVector3(0, 0, 0)  // Inverted position
+            let rotationOffset = SCNVector4(0.0, -1, 0.0, 1) // Inverted rotation (negate Y and W)
+
+            return (positionOffset, rotationOffset)
+        }
     
     // MARK: - Local URL for Number
     func localURLForNumber(_ number: String) -> URL {
         let modelFileName = "\(number).usdz"
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        return documentsDirectory.appendingPathComponent(modelFileName)
+        let modelsDirectory = URL(fileURLWithPath: "/Users/t-borabin/Desktop/college/10_S2025/TECH 5910/Liveinit/Homey.AI")
+        return modelsDirectory.appendingPathComponent(modelFileName)
     }
+//    func localURLForNumber(_ number: String) -> URL {
+//        let modelFileName = "\(number).usdz"
+//        let currentDirectory = Bundle.main.bundleURL
+//           return currentDirectory.appendingPathComponent(modelFileName)
+////        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+////        return documentsDirectory.appendingPathComponent(modelFileName)
+////    }
     
     // MARK: - JSON String Conversion
     func jsonString(from object: Any) -> String {
@@ -437,7 +395,22 @@ struct CaptureRoomView: View {
         scene.rootNode.addChildNode(cameraNode)
     }
     
-    // MARK: - Step 1: Request Textual Instructions
+    // Add a method to get model identifiers from the scene
+    func getModelIdentifiersFromScene() -> [String] {
+        guard let scnView = self.scnView else { return [] }
+        var modelIdentifiers: [String] = []
+
+        for child in scnView.scene?.rootNode.childNodes ?? [] {
+            if let name = child.name, name.hasPrefix("model_") {
+                let identifier = name.replacingOccurrences(of: "model_", with: "")
+                modelIdentifiers.append(identifier)
+            }
+        }
+
+        return modelIdentifiers
+    }
+
+    // MARK: - Step 1: Request grid layout Instructions
     func requestTextualInstructions(
         referenceImage: UIImage,
         sceneSnapshot: UIImage,
@@ -449,96 +422,141 @@ struct CaptureRoomView: View {
         }
         // Convert both images to Base64
 //        guard let refData = referenceImage.pngData(),
-          guard    let snapData = sceneSnapshot.jpegData(compressionQuality: 0.3) else {
-            completion(nil)
-            return
-        }
+//          guard    let snapData = sceneSnapshot.jpegData(compressionQuality: 0.3) else {
+//            completion(nil)
+//            return
+//        }
 //        let refBase64 = refData.base64EncodedString()
-        let snapBase64 = snapData.base64EncodedString()
-        let productEntries = searchResponse.enumerated().compactMap {
-            (index, groupedResult) -> (Int, ProductResult, BoundingPoly, String)? in
-            guard let topProduct = groupedResult.results.first else { return nil }
-            guard let extractedNumber = extractFirstNumber(from: topProduct.image) else { return nil }
-            return (index, topProduct, groupedResult.boundingPoly, extractedNumber)
-        }
+//        let snapBase64 = snapData.base64EncodedString()
+//        let productEntries = searchResponse.enumerated().compactMap {
+//            (index, groupedResult) -> (Int, ProductResult, BoundingPoly, String)? in
+//            guard let topProduct = groupedResult.results.first else { return nil }
+//            guard let extractedNumber = extractFirstNumber(from: topProduct.image) else { return nil }
+//            return (index, topProduct, groupedResult.boundingPoly, extractedNumber)
+//        }
         // update productsData to get the size of each object and dimensions
-        let productsData: [[String: Any]] = productEntries.enumerated().map { (localIndex, entry) in
-            let (index, product, poly, number) = entry
-            
-            let vertices = poly.normalizedVertices.map {
-                ["x": $0.x ?? 0, "y": $0.y ?? 0]
-            }
-            
+        let productsData: [[String: Any]] = getModelIdentifiersFromScene().enumerated().map { (index, identifier) in
+                guard let modelNode = scnView?.scene?.rootNode.childNode(withName: "model_\(identifier)", recursively: true) else {
+                    print("Model node for index \(index) not found in scene")
+                    return [:]
+                }
             // Calculate dimensions from the bounding polygon
-            let xCoordinates = poly.normalizedVertices.compactMap { $0.x }
-            let yCoordinates = poly.normalizedVertices.compactMap { $0.y }
+            var min = SCNVector3Zero
+            var max = SCNVector3Zero
+            modelNode.__getBoundingBoxMin(&min, max: &max)
             
-            let width = (xCoordinates.max() ?? 0) - (xCoordinates.min() ?? 0)
-            let height = (yCoordinates.max() ?? 0) - (yCoordinates.min() ?? 0)
+            let width = (max.x - min.x)
+            let depth = (max.z - min.z)
+            
+//            let xCoordinates = poly.normalizedVertices.compactMap { $0.x }
+//            let yCoordinates = poly.normalizedVertices.compactMap { $0.y }
+//            
+//            let width = (xCoordinates.max() ?? 0) - (xCoordinates.min() ?? 0)
+//            let depth = (yCoordinates.max() ?? 0) - (yCoordinates.min() ?? 0)
             
             return [
                 "id": index,
-                "name": product.product.displayName ?? "furniture",
+//                "name": product.product.displayName ?? "furniture",
 //                "boundingPoly": vertices,
 //                "number": number,
                 "dimensions": [
                     "width": (width * 10).rounded() / 10,
-                    "height": (height * 10).rounded() / 10
+                    "depth": (depth * 10).rounded() / 10
                 ]
             ]
         }
         
         print(productsData)
         
+        var prodDescription: String = """
+        [
+            {
+              "id": 0,
+              "name": "High-Back Upholstered Dining Chair",
+              "overview": "A stylish dining chair with a high back, slim legs, and soft fabric upholstery for comfort and elegance.",
+              "design": "Tall, slightly curved backrest for ergonomic support, padded seat, and tapered metal legs with a gold or brass finish.",
+              "material": "Soft fabric upholstery, possibly velvet or textured weave, with metal legs in a luxurious finish.",
+              "style": "Modern, contemporary, and elegant; suits dining rooms, bedrooms, and offices.",
+              "keywords": ["Dining Chair", "Upholstered", "Modern", "Elegant", "Fabric", "Metal Legs", "Gold Finish", "Neutral", "High-Back"]
+            },
+            {
+              "id": 1,
+              "name": "Upholstered Armchair",
+              "overview": "A deep-seated, dark green upholstered armchair with plush padding and a high backrest for comfort.",
+              "design": "Boxy yet plush with soft armrests, minimal visible frame, and a seamless look.",
+              "material": "Velvet or soft polyester with a textured weave for depth.",
+              "style": "Modern, contemporary, and classic; suits living rooms, lounges, and reading nooks.",
+              "keywords": ["Armchair", "Lounge Chair", "Upholstered", "Modern", "Cozy", "Fabric", "Velvet", "Dark Green"]
+            },
+            {
+                "id": 2,
+                "name": "Modern Curved Loveseat",
+                "overview": "A sleek loveseat with a curved backrest, slim metal legs, and smooth fabric upholstery for modern comfort.",
+                "design": "Curved backrest flowing into armrests, compact two-seater size with tapered metal legs.",
+                "material": "Soft fabric upholstery with foam padding, metal legs in brass or matte black finish.",
+                "style": "Perfect for modern, minimalist, and contemporary spaces; suits living rooms, offices, and small apartments.",
+                "keywords": ["Loveseat", "Sofa", "Modern", "Minimalist", "Contemporary", "Fabric", "Metal Legs", "Curved Back", "Neutral Gray"]
+              },
+              {
+                "id": 3,
+                "name": "Wooden Pedestal Coffee Table",
+                "overview": "A round wooden coffee table with a solid pedestal base, blending modern and rustic aesthetics.",
+                "design": "Circular tabletop with subtle wood grain, supported by a sturdy, tapered pedestal base for stability.",
+                "material": "Natural wood with a warm brown finish, smooth surface with a matte or semi-gloss sheen.",
+                "style": "Ideal for modern, rustic, and Scandinavian interiors; suits living rooms and lounge areas.",
+                "keywords": ["Coffee Table", "Wooden Table", "Modern", "Rustic", "Scandinavian", "Solid Wood", "Pedestal Base", "Warm Brown"]
+              }
+        ]
+        """
+        
         var outputFloorPlan: String = """
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
-        -----------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
+        ---------------------------------------------
 """
         // Prompt: ask for textual instructions only
         // update prompty to input textual representation of the room
         let prompt = """
-        You are a professional interior designer. \
+        You are a professional interior designer. With a strong math geometry background\
         
-        Design a floor plan layout for my room with overall dimensions 3.5 x 3.5. The room is textually represented using ASCII numerical characters and '-'s. The empty room is textuaally represented by a 35 by 35 grid of '-' characters shown below. Each '-' represents 0.1 units in the room. 
+        Design a floor plan layout for my room with overall dimensions 4.5 x 3.0 (width x depth). The room is textually represented using ASCII numerical characters and '-'s. The empty room is textuaally represented by a 45 by 30 grid of '-' characters shown below. Each '-' represents 0.1 units in the room. 
         Current floor plan : 
         \(outputFloorPlan) \
         
         Input furniture data (JSON): \(jsonString(from: productsData)) \
+        
+        Input furniture descriptions (JSON): \(prodDescription) \
+        
         Represent each piece of furniture from the inputted furniture data using its unique "id" value. Use the "dimensions" data to determine the size of the furniture. Make sure none of the pieces of furniture collide. 
-        Example of a chair placed in the room with Id 2, width 0.5, and height 0.4. Width of 0.5 corresponds to 5 units on the textual grid, similarly height 0.4 is corresponds to 4 units on the textural grid. So the chair should cover 4 x 5 units on the grid, as shown below.               
+        Use the descriptions for each piece of furntiure to determine the optimal placement of each piece in the room. Descriptions for each piece of furniture are given in the input furniture descriptions data. 
+        Example of a chair placed in the room with Id 2, width 0.5, and depth 0.4. Width of 0.5 corresponds to 5 units on the textual grid, similarly depth 0.4 is corresponds to 4 units on the textural grid. So the chair should cover 4 x 5 units on the grid, as shown below.               
                             -----------------------------------
                             -----------------------------------
                             ------22222------------------------
@@ -547,9 +565,9 @@ struct CaptureRoomView: View {
                             ------22222------------------------
                             -----------------------------------
                             -----------------------------------
-        Please create a logical floorplan using all pieces of furniture listed in the input product data. Ensure that no pieces of furniture collide with each other. Place the furniture from largest footprint to smallest. Each piece of furniture from the input furniture data should be placed only once in the room. Output the floorplan using the '-' and ASCII numerical characters. The final floor plan should have final dimensions 35 characters by 35 characters. 
-                
-        Return only the floorplan represented with text. 
+        Please create a logical floorplan using all pieces of furniture listed in the input product data. Ensure that no pieces of furniture collide with each other. Each piece of furniture from the input furniture data should be placed only once in the room. Output the floorplan using the '-' and ASCII numerical characters. The final floor plan should have final dimensions 45 characters by 30 characters with all the pieces of furniture placed in it. 
+        
+        Return only the floorplan represented with text. All pieces of furniture MUST be placed in the room. 
         """
 //        let prompt = """
 //        You are a professional interior designer. \
@@ -622,7 +640,7 @@ struct CaptureRoomView: View {
                 // Extract and print the final message content
                 if let text = response.choices.first?.message.content {
                     print("Final Extracted Text Response: \(text)")
-//                    outputFloorPlan = text
+                    outputFloorPlan = text
                     completion(text)
                 } else {
                     print("No content in response.")
@@ -634,265 +652,60 @@ struct CaptureRoomView: View {
             }
         }
         task.resume()
-//        let task = URLSession.shared.dataTask(with: request) { data, _, error in
-//            if let error = error {
-//                print("Error requesting textual instructions: \(error)")
-//                completion(nil)
-//                return
-//            }
-//            guard let data = data else {
-//                print("No data from LLM for textual instructions.")
-//                completion(nil)
-//                return
-//            }
-//            do {
-//                if let responseString = String(data: data, encoding: .utf8) {
-//                    print("Second iteration raw response:\n\(responseString)")
-//                }
-//                let response = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)
-////                print("text response: \(response)")
-//                if let text = response.choices.first?.message.content {
-//                    completion(text)
-//                } else {
-//                    completion(nil)
-//                }
-//            } catch {
-//                print("Failed to decode textual instructions: \(error)")
-//                completion(nil)
-//            }
-//        }
-//        task.resume()
     }
     
-    // MARK: - Take Snapshot
-    func takeSnapshot() -> UIImage? {
-        guard let scnView = self.scnView else { return nil }
-        guard let scene = scnView.scene else { return nil }
+    // MARK: - extract furniture centers from grid
+    func extractFurnitureCenters(from text: String) -> [Character: [(Double, Double)]] {
+        var furniturePositions = [Character: [(Int, Int)]]()
         
-        // First, set up a custom camera node
-        setupCustomCamera(for: scnView)
+        let rows = text.components(separatedBy: "\n")
+        let rowCount = rows.count
         
-        // If the scene has multiple cameras, you can explicitly choose which one:
-        if let cameraNode = scene.rootNode.childNode(withName: "MyCameraNode", recursively: true) {
-            scnView.pointOfView = cameraNode
-        }
-        
-        // Now take the snapshot
-        let snapshot = scnView.snapshot()
-//        
-//        guard let imageData = snapshot.pngData() else {
-//            print("Failed to convert snapshot to PNG data.")
-//            return nil
-//        }
-//        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-//        let tempURL = documentsDir.appendingPathComponent("debug_snapshot.png")
-//        do {
-//            try imageData.write(to: tempURL)
-//            print("Wrote snapshot to: \(tempURL.path)")
-//        } catch {
-//            print("Failed to write snapshot: \(error)")
-//        }
-        
-        // 2) Scale it down to, say, 300×300
-        let targetSize = CGSize(width: 300, height: 300)
-        UIGraphicsBeginImageContextWithOptions(targetSize, false, 1.0)
-        snapshot.draw(in: CGRect(origin: .zero, size: targetSize))
-        let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        
-        return resizedImage
-    }
-    func compressedImageData(from image: UIImage, quality: CGFloat = 0.3) -> Data? {
-        // Adjust quality from 0.0 to 1.0 (lowest to highest)
-        return image.jpegData(compressionQuality: quality)
-    }
-    
-    // MARK: - Send Snapshot to LLM (One Call Per Iteration)
-    func requestPositionsAndOrientations(instruction: String, completion: @escaping ([Int : SCNMatrix4]?) -> Void) {
-        guard let apiKey = getOpenAIAPIKey() else {
-            completion(nil)
-            return
-        }
-        
-        // Build a JSON chunk for the LLM. For now, you might just send a textual prompt,
-        // or combine it with boundingPoly, etc., whichever makes sense.
-        // For illustration, we’ll show the same prompt you had earlier:
-        
-        let productEntries = searchResponse.enumerated().compactMap {
-            (index, groupedResult) -> (Int, ProductResult, BoundingPoly, String)? in
-            guard let topProduct = groupedResult.results.first else { return nil }
-            guard let extractedNumber = extractFirstNumber(from: topProduct.image) else { return nil }
-            return (index, topProduct, groupedResult.boundingPoly, extractedNumber)
-        }
-        
-//        update to save the 2D dimensions
-        let productsData: [[String: Any]] = productEntries.map { (index, product, poly, number) in
-            let vertices = poly.normalizedVertices.map {
-                ["x": $0.x ?? 0, "y": $0.y ?? 0]
-            }
-            return [
-                "id": index,
-                "name": product.product.displayName ?? "furniture",
-                "boundingPoly": vertices,
-                "number": number
-            ]
-        }
-        print("Previous Positions and Orientation: \(self.lastPosOrienString)")
-//
-//        adjust prompt to take in textual representation of the room
-        let prompt = """
-        You are an expert in 3D interior design with a strong math background. 
-        Update Instructions: \(instruction)
-        Previous Positions and Orientation: \(self.lastPosOrienString)
-        Products (JSON):
-        //           \(jsonString(from: productsData)) \
-        
-        Your task:
-        - Use the instructions to update the X, Y, Z positions (in meters) and rotationX, rotationY, rotationZ (in degrees) for each product so that:
-            * They remain within the 0–3.48 boundary on the X and Z axes.
-            * They do not collide with each other.
-            * Each piece of furniture is oriented correctly and pitched by +90 degrees if needed.
-        - Return only valid JSON in the following format (without code fences or extra text). Use two decimal places for all floats:
-
-        {
-          "products": [
-            {
-              "id": 0,
-              "position": { "x": 1.00, "y": 0.00, "z": 2.00 },
-              "orientation": { "rotationX": 0.00, "rotationY": 90.00, "rotationZ": 0.00 }
-            },
-            ...
-          ]
-        }
-
-        IMPORTANT: Return only a valid JSON object without any code fences, formatting, or additional text. Use two decimal places.
-
-        """
-
-//        let imageDataURL = "data:image/jpeg;base64,\(base64Image)"
-        
-        guard let requestURL = URL(string: "https://api.openai.com/v1/chat/completions") else {
-            print("Invalid OpenAI API URL.")
-            completion(nil)
-            return
-        }
-        
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "POST"
-        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-
-        let requestBody: [String: Any] = [
-            "model": "gpt-4o",  // or your own model name
-            "messages": [
-                [
-                    "role": "system",
-                    "content": "You are an expert in 3D interior design with a strong math background. Given an area of a certain size, you can generate a list of items that are appropriate to that area, in the right place. Return only a valid JSON (no code fences and no ` charater) and nothing else."
-                ],
-                [
-                    "role": "user",
-                    "content": [
-                        ["type": "text", "text": prompt],
-//                        ["type": "image_url", "image_url": ["url": imageDataURL]],
-//                        ["type": "image_url", "image_url": ["url": roomImageURL]]
-                    ]
-                ]
-            ],
-//            "max_tokens": 1500,
-//            "temperature": 0.7
-        ]
-        
-        request.httpBody = try? JSONSerialization.data(withJSONObject: requestBody)
-        
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("Error sending snapshot to LLM: \(error)")
-                completion(nil)
-                return
-            }
-            guard let data = data else {
-                print("No data received from LLM.")
-                completion(nil)
-                return
-            }
-            
-            if let responseString = String(data: data, encoding: .utf8) {
-//                print("LLM Response: \(responseString)")
-//                self.lastPosOrienString = responseString
-            }
-            
-            // Attempt to parse the "content" as BulkResponse
-            do {
-                let jsonResponse = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)
-                if let content = jsonResponse.choices.first?.message.content {
-                    let decoder = JSONDecoder()
-                    let updatedBulkResponse = try decoder.decode(BulkResponse.self,
-                                                                from: content.data(using: .utf8)!)
-                    
-                    let encoder = JSONEncoder()
-                    encoder.outputFormatting = [.prettyPrinted] // optional for readable indentation
-                    // 2) Encode the array of products
-                    let data = try encoder.encode(updatedBulkResponse.products)
-                    // 3) Convert Data to String
-                    if let jsonString = String(data: data, encoding: .utf8) {
-                        self.lastPosOrienString = jsonString
-                        
-                    } else {
-                        print("Failed to convert products JSON to String.")
-                    }
-                    
-                    
-                    // Convert BulkResponse → [Int : SCNMatrix4]
-                    var transformDict: [Int: SCNMatrix4] = [:]
-                    for product in updatedBulkResponse.products {
-                        var transform = SCNMatrix4Identity
-                        // Position
-                        transform = SCNMatrix4Translate(transform,
-                                                        -1 * product.position.x,
-                                                        product.position.y,
-                                                        product.position.z)
-                        // Rotation
-                        transform = SCNMatrix4Rotate(transform,
-                                                     product.orientation.rotationX * .pi / 180,
-                                                     1, 0, 0)
-                        transform = SCNMatrix4Rotate(transform,
-                                                     product.orientation.rotationY * .pi / 180,
-                                                     0, 1, 0)
-                        transform = SCNMatrix4Rotate(transform,
-                                                     product.orientation.rotationZ * .pi / 180,
-                                                     0, 0, 1)
-                        // Pitch up furniture
-                        transform = SCNMatrix4Rotate(transform, -90 * .pi / 180, 1, 0, 0)
-                        
-                        transformDict[product.id] = transform
-                    }
-                    completion(transformDict)
-                } else {
-                    print("No content in LLM response.")
-                    completion(nil)
+        for (rowIndex, row) in rows.enumerated() {
+            for (colIndex, char) in row.enumerated() {
+                if char.isNumber {
+                    furniturePositions[char, default: []].append((rowIndex, colIndex))
                 }
-            } catch {
-                print("Error parsing LLM response: \(error)")
-                completion(nil)
             }
         }
-        task.resume()
+        
+        var furnitureCenters = [Character: [(Double, Double)]]()
+        
+        for (furniture, positions) in furniturePositions {
+            // calc bounding box of furniture
+            let minRow = positions.map {$0.0}.min() ?? 0
+            let maxRow = positions.map {$0.0}.max() ?? 0
+            let minCol = positions.map {$0.1}.min() ?? 0
+            let maxCol = positions.map {$0.1}.max() ?? 0
+            
+            let centerRow = Double(minRow + maxRow + 1) / 20.0
+            let centerCol = Double(minCol + maxCol + 1) / 20.0
+            
+            furnitureCenters[furniture, default: []].append((centerRow, centerCol))
+        }
+        
+        return furnitureCenters
     }
+    
     
     // MARK: - Update Trafnsforms
     func updateTransforms(with newTransforms: [Int: SCNMatrix4]) {
         DispatchQueue.main.async {
             guard let scnView = self.scnView else { return }
             
+            let (transOffset, rotOffset) = computeInverseRoomOffset() // compute global offset
+            
             for (id, transform) in newTransforms {
                 let nodeName = "model_\(id)"
                 if let modelNode = scnView.scene?.rootNode.childNode(withName: nodeName, recursively: true) {
-                    
-                    modelNode.transform = transform
+                    // edit to only udpdate translation
+//                    let translation = SCNMatrix4Translate(transform, transform.m41 + transOffset.x, transform.m42 + transOffset.y, transform.m43 + transOffset.z)
+                    let translation = SCNVector3(transform.m41 + transOffset.x, transform.m42 + transOffset.y, transform.m43 + transOffset.z)
+//                    modelNode.transform = translation
+                    modelNode.position = translation
                     modelNode.scale = SCNVector3(0.75, 0.75, 0.75)
 
-                    print("Updated transform for model \(id)")
+                    print("Updated transform for model \(id) trandform:")
                 } else {
                     print("Model node with id \(id) not found in scene.")
                 }

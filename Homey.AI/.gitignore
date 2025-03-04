@@ -16,6 +16,7 @@ amplifyconfiguration.dart
 amplify-build-config.json
 amplify-gradle-config.json
 amplifytools.xcconfig
+Homey.AI/Constants.swift
 .secret-*
 **.sample
 #amplify-do-not-edit-end
